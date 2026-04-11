@@ -1,0 +1,46 @@
+services:
+  mariadb:
+    image: mariadb:lts
+    container_name: footage_mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password_here
+      MYSQL_DATABASE: footage_metadata
+      MYSQL_USER: autoCowboy
+      MYSQL_PASSWORD: DP@uTf68
+    ports:
+      - "3306:3306"
+    volumes:
+      - /mnt/c/Users/zeke/Desktop/securityCowboy/mariadb_data:/var/lib/mysql
+
+  minio:
+    image: minio/minio
+    container_name: footage_minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: adminCowboy
+      MINIO_ROOT_PASSWORD: ug54!tR9a
+      MINIO_REGION: texas-coast
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"   
+      - "9001:9001"   
+    volumes:
+      - /mnt/c/Users/zeke/Desktop/securityCowboy/minio_data:/data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: footage_rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: cowboyRabbit
+      RABBITMQ_DEFAULT_PASS: wOia64HgF1
+    ports:
+      - "5672:5672"   
+      - "15672:15672" 
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+
+volumes:
+  rabbitmq_data:
