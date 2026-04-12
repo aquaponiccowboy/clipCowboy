@@ -18,30 +18,35 @@ if __name__ == "__main__":
 
     ensure_schema(config)
 
-    targets = get_target_keys(config)
+    while True:
+        all_targets = get_target_keys(config)
+        queue = [t for t in all_targets if not is_processed(t, config)]
 
-    for target in targets:
-        if is_processed(target, config):
-            continue
+        if not queue:
+            logging.info("No new files to process. Exiting.")
+            break
 
-        context = get_camera_context(target, config)
-        if not context:
-            continue
+        logging.info(f"Found {len(queue)} files in queue. Starting batch processing...")
 
-        result = analyze_video(context, config)
+        for target in queue:
+            context = get_camera_context(target, config)
+            if not context:
+                continue
 
-        if result['success']:
-            if result['motion']:
-                logging.warning(f"Motion Detected in {target}!")
+            result = analyze_video(context, config)
 
-            commit_result(
-                target,
-                config,
-                has_motion=result['motion'],
-                camera_id=context['id'],
-                events=result['events']
-            )
-        else:
-            logging.error(f"Skipping persistence for {target} due to crash.")
+            if result['success']:
+                if result['motion']:
+                    logging.warning(f"Motion Detected in {target}!")
 
-    logging.info("Pipeline run complete.")
+                commit_result(
+                    target,
+                    config,
+                    has_motion=result['motion'],
+                    camera_id=context['id'],
+                    events=result['events']
+                )
+            else:
+                logging.error(f"Skipping persistence for {target} due to crash.")
+
+        logging.info("Batch complete. Re-scanning bucket...")
