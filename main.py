@@ -5,6 +5,7 @@ from src.ingestion import get_target_keys
 from src.router import get_camera_context
 from src.processor import analyze_video
 from src.persistence import is_processed, commit_result
+from src.database import ensure_schema
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -15,7 +16,8 @@ def load_config(path="config.yml"):
 if __name__ == "__main__":
     logging.info("Booting SecurityCowboy Continuous Batch Processor (YOLO Edition)...")
     config = load_config()
-    
+    ensure_schema(config)
+
     try:
         while True:
             # 1. Check the queue — filter already-processed files before anything else
@@ -45,7 +47,7 @@ if __name__ == "__main__":
                         logging.info(f"💤 No objects in {target}. Moving to quarantine.")
                     
                     # We now pass the ENTIRE result dictionary to persistence
-                    commit_result(target, config, result)
+                    commit_result(target, config, result, camera_id=context['id'])
                 else:
                     logging.error(f"Skipping persistence for {target} due to processing crash.")
             
