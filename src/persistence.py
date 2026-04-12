@@ -1,5 +1,6 @@
 import logging
 import boto3
+import os
 from botocore.exceptions import ClientError
 
 def _get_s3_client(config: dict):
@@ -20,29 +21,42 @@ def is_processed(file_key: str, config: dict) -> bool:
     except ClientError:
         return False
 
-def commit_result(file_key: str, config: dict, has_motion: bool):
-    """
-    Smart Commit:
-    - If motion: Copies video to output bucket, writes .done, deletes original.
-    - If boring: Writes .done, deletes original (TRASHES the video to save space).
-    """
+def commit_result(file_key: str, config: dict, result: dict):
     s3 = _get_s3_client(config)
     input_bucket = config['storage']['buckets']['input']
     output_bucket = config['storage']['buckets']['output']
+    quarantine_bucket = config['storage']['buckets']['quarantine']
+    
     done_key = f"{file_key}.done"
+    base_name = file_key.replace('.TS', '')
 
     try:
-        if has_motion:
-            logging.warning(f"💾 MOTION KEPT: Archiving {file_key} to processed bucket.")
-            copy_source = {'Bucket': input_bucket, 'Key': file_key}
-            s3.copy_object(CopySource=copy_source, Bucket=output_bucket, Key=file_key)
-        else:
-            logging.info(f"🗑️ CLEAR: Deleting {file_key} to save disk space.")
+        if result.get("has_objects") and result.get("local_video_path"):
+            logging.info(f"✅ ACTION DETECTED: Uploading annotated video for {file_key}...")
             
-        # Write the 0-byte audit log
+            new_video_name = f"annotated_{base_name}.mp4"
+            local_path = result["local_video_path"]
+            
+            # 1. Upload the newly rendered video with bounding boxes
+            s3.upload_file(local_path, output_bucket, new_video_name)
+            
+            # 2. Upload the JSON event ledger as a text file so you can read the timestamps
+            import json
+            s3.put_object(Bucket=output_bucket, Key=f"{base_name}_events.json", Body=json.dumps(result["events"], indent=2))
+            
+            # 3. Clean up the local hard drive
+            os.remove(local_path)
+            
+        else:
+            logging.info(f"🛡️ NO ACTION: Moving {file_key} to Quarantine for spot-checking.")
+            # Move original file to quarantine instead of deleting
+            copy_source = {'Bucket': input_bucket, 'Key': file_key}
+            s3.copy_object(CopySource=copy_source, Bucket=quarantine_bucket, Key=file_key)
+            
+        # Write the .done marker to output bucket to prevent double-processing
         s3.put_object(Bucket=output_bucket, Key=done_key, Body=b"")
         
-        # Destroy the original
+        # Finally, remove from the unprocessed queue
         s3.delete_object(Bucket=input_bucket, Key=file_key)
         
     except Exception as e:

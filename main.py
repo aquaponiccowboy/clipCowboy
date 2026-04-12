@@ -1,6 +1,6 @@
 import yaml
 import logging
-import json
+import time
 from src.ingestion import get_target_keys
 from src.router import get_camera_context
 from src.processor import analyze_video
@@ -13,31 +13,45 @@ def load_config(path="config.yml"):
         return yaml.safe_load(f)
 
 if __name__ == "__main__":
-    logging.info("Booting SecurityCowboy Smart Pipeline...")
+    logging.info("Booting SecurityCowboy Continuous Batch Processor (YOLO Edition)...")
     config = load_config()
     
-    targets = get_target_keys(config)
-    
-    for target in targets:
-        if is_processed(target, config):
-            continue
-
-        context = get_camera_context(target, config)
-        if not context:
-            continue
+    try:
+        while True:
+            # 1. Check the queue
+            targets = get_target_keys(config)
             
-        # Run the AI
-        result = analyze_video(context, config)
-        
-        if result['success']:
-            if result['motion']:
-                logging.warning(f"🚨 Motion Detected in {target}!")
-                # Print the timestamp log nicely formatted
-                print(json.dumps(result['events'], indent=2))
+            if not targets:
+                logging.info("Queue empty. Sleeping for 60 seconds...")
+                time.sleep(60)
+                continue
+                
+            logging.info(f"Found {len(targets)} files in queue. Starting batch processing...")
             
-            # Persist intelligently based on motion
-            commit_result(target, config, result['motion'])
-        else:
-            logging.error(f"Skipping persistence for {target} due to crash.")
+            # 2. Process the batch
+            for target in targets:
+                if is_processed(target, config):
+                    continue
 
-    logging.info("Pipeline run complete.")
+                context = get_camera_context(target, config)
+                if not context:
+                    continue
+                    
+                result = analyze_video(context, config)
+                
+                # Check for success and the new 'has_objects' key
+                if result.get('success'):
+                    if result.get('has_objects'):
+                        logging.warning(f"🚨 Objects Detected in {target}! Committing annotated video.")
+                    else:
+                        logging.info(f"💤 No objects in {target}. Moving to quarantine.")
+                    
+                    # We now pass the ENTIRE result dictionary to persistence
+                    commit_result(target, config, result)
+                else:
+                    logging.error(f"Skipping persistence for {target} due to processing crash.")
+            
+            logging.info("Batch complete. Re-scanning bucket...")
+            
+    except KeyboardInterrupt:
+        logging.info("\nCaught shutdown signal. Halting SecurityCowboy pipeline safely.")
