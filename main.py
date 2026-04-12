@@ -18,21 +18,19 @@ if __name__ == "__main__":
     
     try:
         while True:
-            # 1. Check the queue
-            targets = get_target_keys(config)
-            
+            # 1. Check the queue — filter already-processed files before anything else
+            all_targets = get_target_keys(config)
+            targets = [t for t in all_targets if not is_processed(t, config)]
+
             if not targets:
-                logging.info("Queue empty. Sleeping for 60 seconds...")
+                logging.info("No new files to process. Sleeping for 60 seconds...")
                 time.sleep(60)
                 continue
-                
+
             logging.info(f"Found {len(targets)} files in queue. Starting batch processing...")
-            
+
             # 2. Process the batch
             for target in targets:
-                if is_processed(target, config):
-                    continue
-
                 context = get_camera_context(target, config)
                 if not context:
                     continue
