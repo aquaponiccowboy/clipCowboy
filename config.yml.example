@@ -1,0 +1,28 @@
+# Copy this file to config.yml and fill in your values
+# config.yml is gitignored — never commit the real config
+
+storage:
+  endpoint_url: http://localhost:9000
+  access_key: adminCowboy
+  secret_key: changeme
+  region_name: us-east-1
+  buckets:
+    input: raw-footage
+    output: processed-footage
+
+database:
+  host: localhost
+  port: 3306
+  name: footage_metadata
+  user: autoCowboy
+  password: changeme
+
+filters:
+  B:
+    spatial_mask:
+      # Full-frame mask — adjust vertices to exclude areas you want ignored
+      vertices: [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]
+  # Add more camera IDs here (last character of filename before .TS)
+  # A:
+  #   spatial_mask:
+  #     vertices: [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]
