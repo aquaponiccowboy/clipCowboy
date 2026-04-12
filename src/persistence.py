@@ -31,11 +31,11 @@ def is_processed(file_key: str, config: dict) -> bool:
 
 def commit_result(file_key: str, config: dict, result: dict, camera_id: str = None):
     s3 = _get_s3_client(config)
-    input_bucket = config['storage']['buckets']['input']
+    converted_bucket = config['storage']['buckets']['converted']
     output_bucket = config['storage']['buckets']['output']
     quarantine_bucket = config['storage']['buckets']['quarantine']
 
-    base_name = file_key.replace('.TS', '')
+    base_name = file_key.rsplit('.', 1)[0]
     has_objects = result.get('has_objects', False)
     disposition = 'archived' if has_objects else 'quarantined'
 
@@ -55,12 +55,13 @@ def commit_result(file_key: str, config: dict, result: dict, camera_id: str = No
         else:
             logging.info(f"NO ACTION: Moving {file_key} to quarantine for spot-checking.")
             s3.copy_object(
-                CopySource={'Bucket': input_bucket, 'Key': file_key},
+                CopySource={'Bucket': converted_bucket, 'Key': file_key},
                 Bucket=quarantine_bucket,
                 Key=file_key
             )
 
-        s3.delete_object(Bucket=input_bucket, Key=file_key)
+        # File now lives in output or quarantine — remove from converted
+        s3.delete_object(Bucket=converted_bucket, Key=file_key)
 
     except ClientError as e:
         logging.error(f"Storage operation failed for {file_key}: {e}")
