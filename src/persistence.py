@@ -43,13 +43,7 @@ def commit_result(file_key: str, config: dict, result: dict, camera_id: str = No
         if has_objects and result.get('local_video_path'):
             logging.info(f"ACTION DETECTED: Uploading annotated video for {file_key}...")
             local_path = result['local_video_path']
-
             s3.upload_file(local_path, output_bucket, f"annotated_{base_name}.mp4")
-            s3.put_object(
-                Bucket=output_bucket,
-                Key=f"{base_name}_events.json",
-                Body=json.dumps(result.get('events', []), indent=2)
-            )
             os.remove(local_path)
 
         else:
