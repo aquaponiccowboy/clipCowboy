@@ -1,29 +1,37 @@
 import os
 import logging
-from src.transcoder import download_and_convert
+from src.transcoder import transcode, download_for_analysis
 from src.analyzer import detect_objects
 
 
-def analyze_video(context: dict, config: dict) -> dict:
+def process_ts(ts_key: str, context: dict, config: dict) -> dict | None:
     """
-    Orchestrates the processing pipeline for a single file:
-      1. Transcoder  — download + remux TS → MP4
-      2. Analyzer    — YOLO object detection + annotated video
+    Full pipeline for a raw .TS file:
+      1. Transcode TS → MP4 (uploads to converted bucket, deletes .TS)
+      2. Analyze local MP4 with YOLO
+    Returns result dict, or None if transcoding failed.
+    The mp4_key (not ts_key) is what gets committed to the DB.
     """
-    result = {"success": False, "has_objects": False, "events": [], "local_video_path": None}
-    mp4_path = None
-
+    local_mp4 = transcode(ts_key, config)
+    if local_mp4 is None:
+        return None  # already converted or failed — Phase 2 will handle it
     try:
-        mp4_path = download_and_convert(context['file_key'], config)
-        detection = detect_objects(mp4_path, context['mask_config'], config)
-        result.update(detection)
-        result["success"] = True
-
-    except Exception as e:
-        logging.error(f"Pipeline error for {context['file_key']}: {e}")
-
+        return detect_objects(local_mp4, context['mask_config'], config)
     finally:
-        if mp4_path and os.path.exists(mp4_path):
-            os.remove(mp4_path)
+        if os.path.exists(local_mp4):
+            os.remove(local_mp4)
 
-    return result
+
+def process_mp4(mp4_key: str, context: dict, config: dict) -> dict | None:
+    """
+    Analysis-only pipeline for an already-converted .MP4 in the converted bucket.
+    Used for crash recovery or re-analysis.
+    """
+    local_mp4 = download_for_analysis(mp4_key, config)
+    if local_mp4 is None:
+        return None
+    try:
+        return detect_objects(local_mp4, context['mask_config'], config)
+    finally:
+        if os.path.exists(local_mp4):
+            os.remove(local_mp4)
