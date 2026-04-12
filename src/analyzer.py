@@ -35,6 +35,7 @@ def detect_objects(mp4_path: str, mask_config: dict, config: dict) -> dict:
     model = _get_model(model_cfg.get('path', 'models/yolov8n.pt'))
     conf = model_cfg.get('confidence', 0.25)
     debug = model_cfg.get('debug', False)
+    debug_dir = model_cfg.get('debug_dir', 'debug')
 
     annotated_path = mp4_path.replace('.mp4', '_annotated.mp4')
 
@@ -76,12 +77,13 @@ def detect_objects(mp4_path: str, mask_config: dict, config: dict) -> dict:
 
         # Debug: dump a mid-video sample so we can see what YOLO is seeing
         if debug and frame_count == max(1, total_frames // 2):
+            os.makedirs(debug_dir, exist_ok=True)
             dbg_name = os.path.splitext(os.path.basename(mp4_path))[0]
-            cv2.imwrite(f"debug_{dbg_name}_raw.jpg", frame)
+            cv2.imwrite(os.path.join(debug_dir, f"{dbg_name}_raw.jpg"), frame)
             overlay = frame.copy()
             cv2.polylines(overlay, [vertices], True, (0, 255, 0), 2)
-            cv2.imwrite(f"debug_{dbg_name}_mask_overlay.jpg", overlay)
-            logging.info(f"Debug frames saved: debug_{dbg_name}_*.jpg")
+            cv2.imwrite(os.path.join(debug_dir, f"{dbg_name}_mask_overlay.jpg"), overlay)
+            logging.info(f"Debug frames saved to {debug_dir}/{dbg_name}_*.jpg")
 
         # Run YOLO on the FULL frame — no pre-masking
         yolo_results = model(frame, conf=conf, verbose=False)
