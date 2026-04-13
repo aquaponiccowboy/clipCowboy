@@ -14,7 +14,9 @@ import logging
 import os
 import pika
 from src.transcoder import transcode
-from src.queue_client import get_channel, publish, TRANSCODE_QUEUE, ANALYZE_QUEUE
+from src.persistence import record_dlq
+from src.database import ensure_schema
+from src.queue_client import get_channel, publish, TRANSCODE_QUEUE, ANALYZE_QUEUE, TRANSCODE_DLQ
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -26,13 +28,17 @@ def load_config(path='config.yml'):
         return yaml.safe_load(f)
 
 
+MAX_ATTEMPTS = 3
+
+
 def handle(ch, method, properties, body):
     msg = json.loads(body)
     ts_key = msg['ts_key']
     camera_id = msg['camera_id']
     mp4_key = ts_key.rsplit('.', 1)[0] + '.mp4'
 
-    logging.info(f"Transcoding: {ts_key}")
+    attempt = (properties.headers or {}).get('x-retry-count', 0) + 1
+    logging.info(f"Transcoding: {ts_key} (attempt {attempt}/{MAX_ATTEMPTS})")
 
     try:
         local_mp4 = transcode(ts_key, config)
@@ -48,12 +54,22 @@ def handle(ch, method, properties, body):
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
     except Exception as e:
-        logging.error(f"Transcode failed for {ts_key}: {e}")
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+        logging.error(f"Transcode failed for {ts_key} (attempt {attempt}/{MAX_ATTEMPTS}): {e}")
+        # Ack the original so it leaves the work queue, then decide retry vs DLQ.
+        # We can't modify headers via basic_nack(requeue=True), so we republish manually.
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+        if attempt < MAX_ATTEMPTS:
+            publish(ch, TRANSCODE_QUEUE, msg, headers={'x-retry-count': attempt})
+            logging.warning(f"Requeued {ts_key} for retry (attempt {attempt + 1}/{MAX_ATTEMPTS}).")
+        else:
+            record_dlq(ts_key, TRANSCODE_DLQ, str(e), config)
+            publish(ch, TRANSCODE_DLQ, {**msg, 'error': str(e)})
+            logging.error(f"Sent to DLQ after {MAX_ATTEMPTS} failed attempts: {ts_key}")
 
 
 if __name__ == '__main__':
     config = load_config()
+    ensure_schema(config)
     conn, ch = get_channel(config)
     ch.basic_qos(prefetch_count=1)
     ch.basic_consume(queue=TRANSCODE_QUEUE, on_message_callback=handle)

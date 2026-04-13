@@ -29,6 +29,15 @@ def ensure_schema(config: dict):
                     processed_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS dlq_files (
+                    id        INT AUTO_INCREMENT PRIMARY KEY,
+                    file_key  VARCHAR(512) NOT NULL UNIQUE,
+                    queue     VARCHAR(64)  NOT NULL,
+                    error     TEXT,
+                    failed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
         logging.info("Database schema verified.")
     finally:
         conn.close()
