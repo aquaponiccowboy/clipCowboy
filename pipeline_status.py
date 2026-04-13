@@ -2,23 +2,27 @@
 """
 pipeline_status.py — live pipeline status
 
-Shows RabbitMQ queue depths, MinIO bucket file counts, and DB statistics.
-Run this while the workers are active to watch files move through the pipeline.
+Refreshes every 5 seconds by default.
 
-    python3 pipeline_status.py           # single snapshot
-    watch -n 5 python3 pipeline_status.py  # refresh every 5s
+    python3 pipeline_status.py              # watch mode (5s refresh)
+    python3 pipeline_status.py -n 10        # watch mode, 10s refresh
+    python3 pipeline_status.py --once       # single snapshot and exit
 """
-import sys
+import argparse
 import logging
-import yaml
+import sys
+import time
+
 import boto3
+import yaml
 from botocore.exceptions import ClientError
 
 from src.database import get_connection
-from src.queue_client import get_channel, TRANSCODE_QUEUE, ANALYZE_QUEUE
+from src.queue_client import ANALYZE_QUEUE, TRANSCODE_QUEUE, get_channel
 
-# Suppress pika and boto noise — only show our output
 logging.basicConfig(level=logging.CRITICAL)
+
+_CLEAR = '\033[2J\033[H'   # ANSI: clear screen + move cursor to top
 
 
 def load_config(path: str = 'config.yml') -> dict:
@@ -48,7 +52,6 @@ def bucket_counts(config: dict) -> dict:
         aws_secret_access_key=storage.get('secret_key'),
         region_name=storage.get('region_name', 'us-east-1'),
     )
-
     counts = {}
     for alias, bucket in storage['buckets'].items():
         try:
@@ -66,12 +69,10 @@ def db_stats(config: dict) -> dict:
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM processed_files")
             total = cur.fetchone()[0]
-
             cur.execute(
                 "SELECT disposition, COUNT(*) FROM processed_files GROUP BY disposition"
             )
             by_disp = {row[0]: row[1] for row in cur.fetchall()}
-
             cur.execute(
                 "SELECT camera_id, COUNT(*) FROM processed_files GROUP BY camera_id ORDER BY camera_id"
             )
@@ -82,46 +83,81 @@ def db_stats(config: dict) -> dict:
         return {'_error': str(e)}
 
 
-if __name__ == '__main__':
-    config = load_config()
+def render(config: dict, interval: int) -> bool:
+    """Print one status snapshot.  Returns False if any service errored."""
     ok = True
+    lines = []
 
-    # ── Queues ─────────────────────────────────────────────────────────────
-    print("\n── RabbitMQ queues ────────────────────────────")
+    # ── header ────────────────────────────────────────────────────────────
+    ts = time.strftime('%Y-%m-%d %H:%M:%S')
+    lines.append(f"SecurityCowboy pipeline status  —  {ts}  (refreshing every {interval}s, Ctrl+C to exit)")
+    lines.append('')
+
+    # ── queues ─────────────────────────────────────────────────────────────
+    lines.append('── RabbitMQ queues ────────────────────────────')
     depths = queue_depths(config)
     if '_error' in depths:
-        print(f"  error: {depths['_error']}")
+        lines.append(f"  error: {depths['_error']}")
         ok = False
     else:
         for q, n in depths.items():
-            bar = '█' * min(n, 40) if n else '·'
-            print(f"  {q:<22}  {n:>5}  {bar}")
+            bar = '█' * min(n, 30) if n else '·'
+            lines.append(f"  {q:<22}  {n:>4}  {bar}")
 
-    # ── Buckets ─────────────────────────────────────────────────────────────
-    print("\n── MinIO buckets ──────────────────────────────")
+    lines.append('')
+
+    # ── buckets ────────────────────────────────────────────────────────────
+    lines.append('── MinIO buckets ──────────────────────────────')
     counts = bucket_counts(config)
     for alias, (bucket, n, err) in counts.items():
         if err:
-            print(f"  {alias:<12}  error: {err}")
+            lines.append(f"  {alias:<12}  error: {err}")
             ok = False
         else:
-            bar = '█' * min(n, 40) if n else '·'
-            print(f"  {alias:<12}  {n:>5} files   {bar}")
+            bar = '█' * min(n, 30) if n else '·'
+            lines.append(f"  {alias:<12}  {n:>4} files  {bar}")
 
-    # ── Database ─────────────────────────────────────────────────────────────
-    print("\n── Database ───────────────────────────────────")
+    lines.append('')
+
+    # ── database ───────────────────────────────────────────────────────────
+    lines.append('── Database ───────────────────────────────────')
     stats = db_stats(config)
     if '_error' in stats:
-        print(f"  error: {stats['_error']}")
+        lines.append(f"  error: {stats['_error']}")
         ok = False
     else:
-        print(f"  total processed : {stats['total']}")
+        lines.append(f"  total processed : {stats['total']}")
         for disp, n in stats['by_disposition'].items():
-            print(f"  {disp:<16}  {n}")
-        if stats['by_camera']:
+            lines.append(f"  {disp:<16}  {n}")
+        if stats.get('by_camera'):
             cams = '  '.join(f"{k}={v}" for k, v in stats['by_camera'].items())
-            print(f"  by camera       : {cams}")
+            lines.append(f"  by camera       : {cams}")
 
-    print()
-    if not ok:
-        sys.exit(1)
+    print('\n'.join(lines), flush=True)
+    return ok
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Pipeline status dashboard')
+    parser.add_argument('--once', action='store_true', help='single snapshot then exit')
+    parser.add_argument('-n', '--interval', type=int, default=5,
+                        metavar='SECONDS', help='refresh interval (default 5)')
+    args = parser.parse_args()
+
+    config = load_config()
+
+    if args.once:
+        ok = render(config, args.interval)
+        sys.exit(0 if ok else 1)
+
+    try:
+        while True:
+            print(_CLEAR, end='', flush=True)
+            render(config, args.interval)
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        print('\nExiting.', flush=True)
+
+
+if __name__ == '__main__':
+    main()
