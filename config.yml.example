@@ -12,10 +12,11 @@ storage:
   secret_key: changeme
   region_name: texas-coast          # must match MINIO_REGION in docker-compose
   buckets:
-    input: security-camera-unprocessed
-    converted: security-camera-converted
-    output: security-camera-processed
-    quarantine: security-camera-quarantine
+    input:      security-camera-unprocessed  # .TS files land here
+    converted:  security-camera-converted    # in-flight MP4s (always cleaned up)
+    archive:    security-camera-archive      # raw MP4s with detections, original filename
+    annotated:  security-camera-annotated    # annotated MP4s (only when save_annotated: true)
+    quarantine: security-camera-quarantine   # no-detection clips for review/deletion
 
 database:
   host: localhost
