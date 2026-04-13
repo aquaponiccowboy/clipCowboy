@@ -14,7 +14,7 @@ import logging
 import os
 import pika
 from src.transcoder import transcode
-from src.persistence import record_dlq
+from src.persistence import record_dlq, ensure_buckets
 from src.database import ensure_schema
 from src.queue_client import get_channel, publish, TRANSCODE_QUEUE, ANALYZE_QUEUE, TRANSCODE_DLQ
 
@@ -70,6 +70,7 @@ def handle(ch, method, properties, body):
 if __name__ == '__main__':
     config = load_config()
     ensure_schema(config)
+    ensure_buckets(config)
     conn, ch = get_channel(config)
     ch.basic_qos(prefetch_count=1)
     ch.basic_consume(queue=TRANSCODE_QUEUE, on_message_callback=handle)
