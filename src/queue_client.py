@@ -3,7 +3,9 @@ import json
 import logging
 
 TRANSCODE_QUEUE = 'footage.transcode'
-ANALYZE_QUEUE = 'footage.analyze'
+ANALYZE_QUEUE   = 'footage.analyze'
+TRANSCODE_DLQ   = 'footage.transcode.dlq'
+ANALYZE_DLQ     = 'footage.analyze.dlq'
 
 
 def get_channel(config: dict):
@@ -22,17 +24,20 @@ def get_channel(config: dict):
     connection = pika.BlockingConnection(params)
     channel = connection.channel()
 
-    for queue in [TRANSCODE_QUEUE, ANALYZE_QUEUE]:
+    for queue in [TRANSCODE_QUEUE, ANALYZE_QUEUE, TRANSCODE_DLQ, ANALYZE_DLQ]:
         channel.queue_declare(queue=queue, durable=True)
 
     return connection, channel
 
 
-def publish(channel, queue: str, message: dict):
+def publish(channel, queue: str, message: dict, headers: dict = None):
     channel.basic_publish(
         exchange='',
         routing_key=queue,
         body=json.dumps(message),
-        properties=pika.BasicProperties(delivery_mode=2)  # persistent
+        properties=pika.BasicProperties(
+            delivery_mode=2,  # persistent
+            headers=headers or {}
+        )
     )
     logging.debug(f"Published to {queue}: {message}")

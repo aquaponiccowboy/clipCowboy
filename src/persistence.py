@@ -16,6 +16,39 @@ def _get_s3_client(config: dict):
     )
 
 
+def is_in_dlq(file_key: str, config: dict) -> bool:
+    conn = get_connection(config)
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT 1 FROM dlq_files WHERE file_key = %s",
+                (file_key,)
+            )
+            return cursor.fetchone() is not None
+    finally:
+        conn.close()
+
+
+def record_dlq(file_key: str, queue: str, error: str, config: dict):
+    conn = get_connection(config)
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """INSERT INTO dlq_files (file_key, queue, error)
+                   VALUES (%s, %s, %s)
+                   ON DUPLICATE KEY UPDATE
+                       queue = VALUES(queue),
+                       error = VALUES(error),
+                       failed_at = CURRENT_TIMESTAMP""",
+                (file_key, queue, error)
+            )
+        logging.warning(f"DLQ record written for {file_key} [{queue}].")
+    except Exception as e:
+        logging.error(f"Failed to write DLQ record for {file_key}: {e}")
+    finally:
+        conn.close()
+
+
 def is_processed(file_key: str, config: dict) -> bool:
     conn = get_connection(config)
     try:

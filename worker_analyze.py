@@ -15,9 +15,9 @@ import pika
 from src.transcoder import download_for_analysis
 from src.analyzer import detect_objects
 from src.router import get_camera_context
-from src.persistence import is_processed, commit_result
+from src.persistence import is_processed, commit_result, record_dlq
 from src.database import ensure_schema
-from src.queue_client import get_channel, ANALYZE_QUEUE
+from src.queue_client import get_channel, publish, ANALYZE_QUEUE, ANALYZE_DLQ
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -27,6 +27,9 @@ config = {}
 def load_config(path='config.yml'):
     with open(path) as f:
         return yaml.safe_load(f)
+
+
+MAX_ATTEMPTS = 3
 
 
 def handle(ch, method, properties, body):
@@ -40,7 +43,8 @@ def handle(ch, method, properties, body):
         ch.basic_ack(delivery_tag=method.delivery_tag)
         return
 
-    logging.info(f"Analyzing: {mp4_key}")
+    attempt = (properties.headers or {}).get('x-retry-count', 0) + 1
+    logging.info(f"Analyzing: {mp4_key} (attempt {attempt}/{MAX_ATTEMPTS})")
 
     context = get_camera_context(mp4_key, config)
     if not context:
@@ -60,8 +64,17 @@ def handle(ch, method, properties, body):
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
     except Exception as e:
-        logging.error(f"Analysis failed for {mp4_key}: {e}")
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+        logging.error(f"Analysis failed for {mp4_key} (attempt {attempt}/{MAX_ATTEMPTS}): {e}")
+        # Ack the original so it leaves the work queue, then decide retry vs DLQ.
+        # We can't modify headers via basic_nack(requeue=True), so we republish manually.
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+        if attempt < MAX_ATTEMPTS:
+            publish(ch, ANALYZE_QUEUE, msg, headers={'x-retry-count': attempt})
+            logging.warning(f"Requeued {mp4_key} for retry (attempt {attempt + 1}/{MAX_ATTEMPTS}).")
+        else:
+            record_dlq(mp4_key, ANALYZE_DLQ, str(e), config)
+            publish(ch, ANALYZE_DLQ, {**msg, 'error': str(e)})
+            logging.error(f"Sent to DLQ after {MAX_ATTEMPTS} failed attempts: {mp4_key}")
 
     finally:
         if local_mp4 and os.path.exists(local_mp4):

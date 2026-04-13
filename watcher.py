@@ -14,7 +14,7 @@ import time
 import boto3
 from botocore.exceptions import ClientError
 from src.ingestion import get_raw_keys, get_converted_keys
-from src.persistence import is_processed
+from src.persistence import is_processed, is_in_dlq
 from src.router import get_camera_context
 from src.queue_client import get_channel, publish, TRANSCODE_QUEUE, ANALYZE_QUEUE
 
@@ -54,6 +54,9 @@ def scan_and_publish(config: dict):
 
             if is_processed(mp4_key, config):
                 continue
+            if is_in_dlq(ts_key, config):
+                logging.debug(f"Skipping DLQ'd file: {ts_key}")
+                continue
             if _already_converted(ts_key, config):
                 # Converted but not analyzed — handled by Phase 2
                 continue
@@ -69,6 +72,9 @@ def scan_and_publish(config: dict):
         # Phase 2: converted but unanalyzed .MP4s → analyze queue (recovery)
         for mp4_key in get_converted_keys(config):
             if is_processed(mp4_key, config):
+                continue
+            if is_in_dlq(mp4_key, config):
+                logging.debug(f"Skipping DLQ'd file: {mp4_key}")
                 continue
 
             context = get_camera_context(mp4_key, config)
