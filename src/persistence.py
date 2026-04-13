@@ -16,6 +16,20 @@ def _get_s3_client(config: dict):
     )
 
 
+def ensure_buckets(config: dict):
+    """Create any configured MinIO buckets that don't already exist."""
+    s3 = _get_s3_client(config)
+    for alias, bucket in config['storage']['buckets'].items():
+        try:
+            s3.head_bucket(Bucket=bucket)
+        except ClientError as e:
+            if e.response['Error']['Code'] in ('404', 'NoSuchBucket'):
+                s3.create_bucket(Bucket=bucket)
+                logging.info(f"Created bucket: {bucket} ({alias})")
+            else:
+                raise
+
+
 def is_in_dlq(file_key: str, config: dict) -> bool:
     conn = get_connection(config)
     try:
