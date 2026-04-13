@@ -33,7 +33,12 @@ def detect_objects(mp4_path: str, mask_config: dict, config: dict) -> dict:
 
     model_cfg = config.get('model', {})
     model = _get_model(model_cfg.get('path', 'models/yolov8n.pt'))
-    conf = model_cfg.get('confidence', 0.25)
+    # global_parameters.confidence_threshold takes precedence when set;
+    # falls back to model.confidence, then the hardcoded default.
+    conf = (
+        config.get('global_parameters', {}).get('confidence_threshold')
+        or model_cfg.get('confidence', 0.25)
+    )
     debug = model_cfg.get('debug', False)
     debug_dir = model_cfg.get('debug_dir', 'debug')
     save_annotated = model_cfg.get('save_annotated', False)

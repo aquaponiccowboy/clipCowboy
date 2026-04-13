@@ -1,11 +1,16 @@
 # Copy this file to config.yml and fill in your values.
 # config.yml is gitignored — never commit the real config.
 
+# Legacy confidence override — takes precedence over model.confidence when set.
+# Useful for a global quality gate independent of model tuning.
+global_parameters:
+  confidence_threshold: 0.85
+
 storage:
   endpoint_url: http://localhost:9000
-  access_key: adminCowboy
+  access_key: changeme
   secret_key: changeme
-  region_name: us-east-1
+  region_name: texas-coast          # must match MINIO_REGION in docker-compose
   buckets:
     input: security-camera-unprocessed
     converted: security-camera-converted
@@ -27,16 +32,19 @@ rabbitmq:
 
 model:
   path: models/yolov8n.pt
-  confidence: 0.25
+  confidence: 0.25                  # used only if global_parameters.confidence_threshold is absent
   # Set true only while tuning — writes an annotated copy alongside the raw archive.
   # Leave false in normal operation; raw MP4s are always retained for future reprocessing.
   save_annotated: false
   debug: false
-  debug_dir: debug
+  debug_dir: debug                  # accepts absolute paths, e.g. /mnt/c/Users/you/Desktop/debug-frames
 
 watcher:
-  scan_interval: 60   # seconds between MinIO scans
+  scan_interval: 60                 # seconds between MinIO scans
 
+# Spatial masks — one entry per camera ID (last char before extension in filename).
+# Vertices are [x, y] pixels at 640x480. Only detections whose bounding-box
+# centre falls inside the polygon are kept.
 filters:
   F:
     spatial_mask:
