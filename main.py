@@ -38,8 +38,12 @@ if __name__ == "__main__":
             converted = get_converted_keys(config)
             queue = [k for k in converted if not is_processed(k, config)]
 
-            if not queue and not raw:
-                logging.info("Nothing to do. Sleeping for 60 seconds...")
+            work_remaining = queue or any(
+                not is_processed(t.rsplit('.', 1)[0] + '.mp4', config)
+                for t in raw
+            )
+            if not work_remaining:
+                logging.info("Nothing new to process. Sleeping for 60 seconds...")
                 time.sleep(60)
                 continue
 
