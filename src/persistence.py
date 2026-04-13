@@ -40,11 +40,21 @@ def commit_result(file_key: str, config: dict, result: dict, camera_id: str = No
     disposition = 'archived' if has_objects else 'quarantined'
 
     try:
-        if has_objects and result.get('local_video_path'):
-            logging.info(f"ACTION DETECTED: Uploading annotated video for {file_key}...")
-            local_path = result['local_video_path']
-            s3.upload_file(local_path, output_bucket, f"annotated_{base_name}.mp4")
-            os.remove(local_path)
+        if has_objects:
+            # Always retain the raw MP4 — future model versions can re-run on it
+            logging.info(f"ACTION DETECTED: Archiving raw MP4 for {file_key}...")
+            s3.copy_object(
+                CopySource={'Bucket': converted_bucket, 'Key': file_key},
+                Bucket=output_bucket,
+                Key=f"raw_{base_name}.mp4"
+            )
+
+            # Annotated copy is optional — only written when save_annotated: true
+            if result.get('local_video_path'):
+                local_path = result['local_video_path']
+                logging.info(f"Uploading annotated video for {file_key}...")
+                s3.upload_file(local_path, output_bucket, f"annotated_{base_name}.mp4")
+                os.remove(local_path)
 
         else:
             logging.info(f"NO ACTION: Moving {file_key} to quarantine for spot-checking.")
@@ -54,7 +64,7 @@ def commit_result(file_key: str, config: dict, result: dict, camera_id: str = No
                 Key=file_key
             )
 
-        # File now lives in output or quarantine — remove from converted
+        # Raw is now in output or quarantine — remove from converted
         s3.delete_object(Bucket=converted_bucket, Key=file_key)
 
     except ClientError as e:

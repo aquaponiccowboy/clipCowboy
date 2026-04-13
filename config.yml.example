@@ -28,6 +28,9 @@ rabbitmq:
 model:
   path: models/yolov8n.pt
   confidence: 0.25
+  # Set true only while tuning — writes an annotated copy alongside the raw archive.
+  # Leave false in normal operation; raw MP4s are always retained for future reprocessing.
+  save_annotated: false
   debug: false
   debug_dir: debug
 

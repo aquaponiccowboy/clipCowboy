@@ -36,6 +36,7 @@ def detect_objects(mp4_path: str, mask_config: dict, config: dict) -> dict:
     conf = model_cfg.get('confidence', 0.25)
     debug = model_cfg.get('debug', False)
     debug_dir = model_cfg.get('debug_dir', 'debug')
+    save_annotated = model_cfg.get('save_annotated', False)
 
     annotated_path = mp4_path.replace('.mp4', '_annotated.mp4')
 
@@ -56,8 +57,10 @@ def detect_objects(mp4_path: str, mask_config: dict, config: dict) -> dict:
 
     vertices = np.array(mask_config['vertices'], np.int32)
 
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(annotated_path, fourcc, fps, (width, height))
+    out = None
+    if save_annotated:
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(annotated_path, fourcc, fps, (width, height))
 
     frame_count = 0
     last_logged_frame = -999
@@ -124,10 +127,12 @@ def detect_objects(mp4_path: str, mask_config: dict, config: dict) -> dict:
                             (int(x1), int(y1) - 6),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-        out.write(frame)
+        if out is not None:
+            out.write(frame)
 
     cap.release()
-    out.release()
+    if out is not None:
+        out.release()
 
     logging.info(
         f"Processed {frame_count} frames — "
@@ -137,7 +142,7 @@ def detect_objects(mp4_path: str, mask_config: dict, config: dict) -> dict:
         f"labels_seen={sorted(all_labels_seen) or 'none'}"
     )
 
-    if result["has_objects"]:
+    if result["has_objects"] and save_annotated:
         result["local_video_path"] = annotated_path
     else:
         if os.path.exists(annotated_path):
