@@ -14,6 +14,10 @@ venv/
 *.jpg
 *.png
 
+# Pipeline working directories
+debug/
+temp_*
+
 # Docker / Backend Data Volumes
 minio_data/
 mariadb_data/
