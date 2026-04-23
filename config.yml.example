@@ -42,6 +42,22 @@ model:
 
 watcher:
   scan_interval: 60                 # seconds between MinIO scans
+  inflight_ttl:  600                # seconds to suppress re-publishing an in-flight file
+
+# Content-based sorting for sort_archive.py.
+# Each category maps a friendly name to the YOLO labels that belong to it.
+# A clip matching multiple categories gets a combined bin: people+vehicles.
+# Clips with detections that match no category go to "other".
+# Labels are case-insensitive. Run `python3 query_detections.py --list-objects`
+# to see every label your model has produced.
+sort:
+  categories:
+    people:
+      labels: [person]
+    vehicles:
+      labels: [car, truck, bus, motorcycle, bicycle]
+    animals:
+      labels: [dog, cat, bird, horse, cow, sheep, bear, elephant, zebra, giraffe]
 
 # Spatial masks — one entry per camera ID (last char before extension in filename).
 # Vertices are [x, y] pixels at 640x480. Only detections whose bounding-box

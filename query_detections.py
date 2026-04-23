@@ -101,7 +101,7 @@ def list_all_objects(config):
         print(f"  {label}")
 
 
-def query(config, object_label, camera, disposition, after, before):
+def query(config, object_label, camera, disposition, category, after, before):
     """Return all rows that pass the SQL-level filters (label/conf filtering done in Python)."""
     conn = get_connection(config)
     try:
@@ -123,6 +123,15 @@ def query(config, object_label, camera, disposition, after, before):
                 clauses.append("disposition = %s")
                 params.append(disposition)
 
+            if category:
+                if category == 'unsorted':
+                    clauses.append("sort_prefix IS NULL AND has_objects = 1")
+                elif category == 'other':
+                    clauses.append("sort_prefix = 'other'")
+                else:
+                    clauses.append("sort_prefix LIKE %s")
+                    params.append(f"%{category}%")
+
             if after:
                 clauses.append("processed_at >= %s")
                 params.append(after.replace(tzinfo=None))
@@ -133,7 +142,7 @@ def query(config, object_label, camera, disposition, after, before):
 
             where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
             cursor.execute(
-                f"SELECT file_key, camera_id, disposition, processed_at, events, model_version "
+                f"SELECT file_key, camera_id, disposition, processed_at, events, model_version, sort_prefix "
                 f"FROM processed_files {where} ORDER BY processed_at DESC",
                 params
             )
@@ -179,6 +188,8 @@ def main():
                         help='Filter by camera ID')
     parser.add_argument('--disposition', choices=['archived', 'quarantined'],
                         help='Filter by disposition')
+    parser.add_argument('--category', metavar='NAME',
+                        help='Filter by sort category (e.g. people, vehicles, people+vehicles, other, unsorted)')
     parser.add_argument('--after', metavar='YYYY-MM-DD',
                         help='Only clips processed on or after this date (UTC)')
     parser.add_argument('--before', metavar='YYYY-MM-DD',
@@ -193,7 +204,7 @@ def main():
         list_all_objects(config)
         return
 
-    if not any([args.object, args.camera, args.disposition, args.after, args.before]):
+    if not any([args.object, args.camera, args.disposition, args.category, args.after, args.before]):
         parser.print_help()
         print("\nProvide at least one filter, or use --list-objects to see available labels.")
         sys.exit(1)
@@ -206,6 +217,7 @@ def main():
                  object_label=args.object,
                  camera=args.camera,
                  disposition=args.disposition,
+                 category=args.category,
                  after=after_dt,
                  before=before_dt)
 
@@ -221,13 +233,15 @@ def main():
         return
 
     print(f"\n{len(rows)} clip(s) found:\n")
-    col_w = max(len(r[0]) for r in rows)
-    print(f"  {'FILE':<{col_w}}  CAM  DISPOSITION   PROCESSED AT          DETECTIONS")
-    print(f"  {'-'*col_w}  ---  ------------  --------------------  ----------")
-    for file_key, cam, disp, processed_at, events_json, model_ver in rows:
+    col_w  = max(len(r[0]) for r in rows)
+    cat_w  = max((len(r[6] or 'unsorted') for r in rows), default=8)
+    print(f"  {'FILE':<{col_w}}  CAM  {'CATEGORY':<{cat_w}}  PROCESSED AT          DETECTIONS")
+    print(f"  {'-'*col_w}  ---  {'-'*cat_w}  --------------------  ----------")
+    for file_key, cam, disp, processed_at, events_json, model_ver, sort_prefix in rows:
         ts      = processed_at.strftime('%Y-%m-%d %H:%M:%S') if processed_at else '—'
         summary = _summarise(_parse_events(events_json), args.object, min_conf)
-        print(f"  {file_key:<{col_w}}  {cam or '?':<3}  {disp:<12}  {ts}  {summary}")
+        cat     = sort_prefix or 'unsorted'
+        print(f"  {file_key:<{col_w}}  {cam or '?':<3}  {cat:<{cat_w}}  {ts}  {summary}")
     print()
 
 
