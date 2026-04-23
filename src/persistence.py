@@ -76,6 +76,18 @@ def is_processed(file_key: str, config: dict) -> bool:
         conn.close()
 
 
+def _delete_db_record(file_key: str, config: dict):
+    """Roll back a just-written processed_files record so the file remains retryable."""
+    conn = get_connection(config)
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("DELETE FROM processed_files WHERE file_key = %s", (file_key,))
+    except Exception as e:
+        logging.error(f"Failed to roll back DB record for {file_key}: {e}")
+    finally:
+        conn.close()
+
+
 def commit_result(file_key: str, config: dict, result: dict, camera_id: str = None):
     s3 = _get_s3_client(config)
     buckets = config['storage']['buckets']
@@ -87,41 +99,9 @@ def commit_result(file_key: str, config: dict, result: dict, camera_id: str = No
     has_objects = result.get('has_objects', False)
     disposition = 'archived' if has_objects else 'quarantined'
 
-    try:
-        if has_objects:
-            # Raw MP4 → archive bucket, original filename unchanged.
-            # To reprocess with a future model: copy back to the converted bucket
-            # and the watcher's recovery path will re-queue it automatically.
-            logging.info(f"ACTION DETECTED: Archiving {file_key}...")
-            s3.copy_object(
-                CopySource={'Bucket': converted_bucket, 'Key': file_key},
-                Bucket=archive_bucket,
-                Key=file_key
-            )
-
-            # Annotated copy → its own bucket, same filename.
-            # Only present when save_annotated: true in config.
-            if result.get('local_video_path'):
-                local_path = result['local_video_path']
-                logging.info(f"Uploading annotated video for {file_key}...")
-                s3.upload_file(local_path, annotated_bucket, file_key)
-                os.remove(local_path)
-
-        else:
-            logging.info(f"NO ACTION: Moving {file_key} to quarantine for spot-checking.")
-            s3.copy_object(
-                CopySource={'Bucket': converted_bucket, 'Key': file_key},
-                Bucket=quarantine_bucket,
-                Key=file_key
-            )
-
-        # File is now in archive, annotated, or quarantine — remove from converted
-        s3.delete_object(Bucket=converted_bucket, Key=file_key)
-
-    except ClientError as e:
-        logging.error(f"Storage operation failed for {file_key}: {e}")
-        return
-
+    # Phase 1: DB record first.
+    # If this fails the file stays in `converted` and the worker retries cleanly.
+    # Writing last (the old order) risked a file being moved with no DB record.
     conn = get_connection(config)
     try:
         with conn.cursor() as cursor:
@@ -142,5 +122,41 @@ def commit_result(file_key: str, config: dict, result: dict, camera_id: str = No
         logging.info(f"DB record written for {file_key} [{disposition}].")
     except Exception as e:
         logging.error(f"DB commit failed for {file_key}: {e}")
+        raise
     finally:
         conn.close()
+
+    # Phase 2: move the file in S3.
+    # On failure, roll back the DB record so the file in `converted` stays
+    # visible and the worker can retry without is_processed() blocking it.
+    try:
+        if has_objects:
+            logging.info(f"ACTION DETECTED: Archiving {file_key}...")
+            s3.copy_object(
+                CopySource={'Bucket': converted_bucket, 'Key': file_key},
+                Bucket=archive_bucket,
+                Key=file_key
+            )
+
+            # Annotated copy — only present when save_annotated: true in config.
+            if result.get('local_video_path'):
+                local_path = result['local_video_path']
+                logging.info(f"Uploading annotated video for {file_key}...")
+                s3.upload_file(local_path, annotated_bucket, file_key)
+                os.remove(local_path)
+
+        else:
+            logging.info(f"NO ACTION: Moving {file_key} to quarantine for spot-checking.")
+            s3.copy_object(
+                CopySource={'Bucket': converted_bucket, 'Key': file_key},
+                Bucket=quarantine_bucket,
+                Key=file_key
+            )
+
+        # File is confirmed in archive or quarantine — remove from converted.
+        s3.delete_object(Bucket=converted_bucket, Key=file_key)
+
+    except ClientError as e:
+        logging.error(f"Storage operation failed for {file_key}: {e}")
+        _delete_db_record(file_key, config)
+        raise
