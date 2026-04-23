@@ -64,12 +64,13 @@ def record_dlq(file_key: str, queue: str, error: str, config: dict):
 
 
 def is_processed(file_key: str, config: dict) -> bool:
+    model_version = config.get('model', {}).get('path', 'models/yolov8n.pt')
     conn = get_connection(config)
     try:
         with conn.cursor() as cursor:
             cursor.execute(
-                "SELECT 1 FROM processed_files WHERE file_key = %s",
-                (file_key,)
+                "SELECT 1 FROM processed_files WHERE file_key = %s AND model_version = %s",
+                (file_key, model_version)
             )
             return cursor.fetchone() is not None
     finally:
@@ -78,10 +79,14 @@ def is_processed(file_key: str, config: dict) -> bool:
 
 def _delete_db_record(file_key: str, config: dict):
     """Roll back a just-written processed_files record so the file remains retryable."""
+    model_version = config.get('model', {}).get('path', 'models/yolov8n.pt')
     conn = get_connection(config)
     try:
         with conn.cursor() as cursor:
-            cursor.execute("DELETE FROM processed_files WHERE file_key = %s", (file_key,))
+            cursor.execute(
+                "DELETE FROM processed_files WHERE file_key = %s AND model_version = %s",
+                (file_key, model_version)
+            )
     except Exception as e:
         logging.error(f"Failed to roll back DB record for {file_key}: {e}")
     finally:
@@ -96,30 +101,35 @@ def commit_result(file_key: str, config: dict, result: dict, camera_id: str = No
     annotated_bucket  = buckets['annotated']
     quarantine_bucket = buckets['quarantine']
 
-    has_objects = result.get('has_objects', False)
-    disposition = 'archived' if has_objects else 'quarantined'
+    has_objects   = result.get('has_objects', False)
+    disposition   = 'archived' if has_objects else 'quarantined'
+    model_version = config.get('model', {}).get('path', 'models/yolov8n.pt')
 
     # Phase 1: DB record first.
     # If this fails the file stays in `converted` and the worker retries cleanly.
     # Writing last (the old order) risked a file being moved with no DB record.
+    # Each (file_key, model_version) pair gets its own row so reprocessing with
+    # a new model appends history rather than overwriting it.
     conn = get_connection(config)
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
-                INSERT INTO processed_files (file_key, camera_id, has_objects, disposition, events)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO processed_files
+                    (file_key, model_version, camera_id, has_objects, disposition, events)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
                     has_objects  = VALUES(has_objects),
                     disposition  = VALUES(disposition),
                     events       = VALUES(events)
             """, (
                 file_key,
+                model_version,
                 camera_id,
                 has_objects,
                 disposition,
                 json.dumps(result.get('events', []))
             ))
-        logging.info(f"DB record written for {file_key} [{disposition}].")
+        logging.info(f"DB record written for {file_key} [{disposition}] model={model_version}.")
     except Exception as e:
         logging.error(f"DB commit failed for {file_key}: {e}")
         raise
