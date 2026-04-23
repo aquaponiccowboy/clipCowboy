@@ -120,10 +120,20 @@ def detect_objects(mp4_path: str, mask_config: dict, config: dict) -> dict:
 
             if (frame_count - last_logged_frame) >= fps:
                 time_sec = round(frame_count / fps, 1)
-                labels = [b[0] for b in kept_boxes]
-                result["events"].append({"time": f"{time_sec}s", "objects": labels})
+                result["events"].append({
+                    "time":       f"{time_sec}s",
+                    "frame":      frame_count,
+                    "detections": [
+                        {
+                            "label":      label,
+                            "confidence": round(float(conf), 3),
+                            "box":        [round(v, 1) for v in xyxy],
+                        }
+                        for label, conf, xyxy in kept_boxes
+                    ],
+                })
                 last_logged_frame = frame_count
-                logging.warning(f"Objects at {time_sec}s: {labels}")
+                logging.warning(f"Objects at {time_sec}s: {[b[0] for b in kept_boxes]}")
 
             # Draw kept boxes on the output frame
             for label, bconf, (x1, y1, x2, y2) in kept_boxes:

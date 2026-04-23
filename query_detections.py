@@ -3,23 +3,24 @@
 query_detections.py — search processed_files for clips matching detection criteria.
 
 Useful for finding footage containing specific objects, narrowing by camera,
-time window, or disposition. Intended for content editing and review workflows.
+time window, disposition, or confidence. Intended for content editing and
+review workflows.
 
 Usage:
     python3 query_detections.py [options]
 
 Examples:
-    # Find all clips containing a person
-    python3 query_detections.py --object person
+    # See all unique object labels recorded in the DB
+    python3 query_detections.py --list-objects
+
+    # All clips containing a person at ≥90% confidence
+    python3 query_detections.py --object person --min-confidence 0.9
 
     # Front-camera clips with a car, archived last month
     python3 query_detections.py --object car --camera F --after 2026-03-01 --before 2026-03-31
 
     # Everything archived (has detections), any object
     python3 query_detections.py --disposition archived
-
-    # Show unique object labels seen across all clips
-    python3 query_detections.py --list-objects
 """
 import argparse
 import json
@@ -39,8 +40,39 @@ def _parse_date(s):
     return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
 
 
+def _parse_events(events_json):
+    """Return parsed events list regardless of old or new schema."""
+    try:
+        return json.loads(events_json) if isinstance(events_json, str) else (events_json or [])
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
+def _event_matches(event: dict, label_filter: str, min_conf: float) -> bool:
+    """Return True if this event contains a matching detection."""
+    detections = event.get('detections')
+    if detections is not None:
+        # New schema: list of {label, confidence, box}
+        for d in detections:
+            if label_filter and d.get('label', '').lower() != label_filter.lower():
+                continue
+            if d.get('confidence', 1.0) >= min_conf:
+                return True
+        return False
+    else:
+        # Old schema: {"time": "Xs", "objects": ["person", ...]}
+        objects = [o.lower() for o in event.get('objects', [])]
+        if label_filter:
+            return label_filter.lower() in objects
+        return bool(objects)
+
+
+def _clip_matches(events: list, label_filter: str, min_conf: float) -> bool:
+    return any(_event_matches(e, label_filter, min_conf) for e in events)
+
+
 def list_all_objects(config):
-    """Print every unique object label seen across all archived clips."""
+    """Print every unique object label seen across all clips."""
     conn = get_connection(config)
     try:
         with conn.cursor() as cursor:
@@ -53,35 +85,35 @@ def list_all_objects(config):
 
     labels = set()
     for (events_json,) in rows:
-        try:
-            events = json.loads(events_json) if isinstance(events_json, str) else events_json
-            for event in events or []:
+        for event in _parse_events(events_json):
+            detections = event.get('detections')
+            if detections is not None:
+                labels.update(d['label'] for d in detections)
+            else:
                 labels.update(event.get('objects', []))
-        except (json.JSONDecodeError, TypeError):
-            pass
 
     if not labels:
         print("No detections found in database.")
         return
 
-    print(f"\n{len(labels)} unique object label(s) detected across all clips:\n")
+    print(f"\n{len(labels)} unique label(s) detected across all clips:\n")
     for label in sorted(labels):
         print(f"  {label}")
 
 
 def query(config, object_label, camera, disposition, after, before):
+    """Return all rows that pass the SQL-level filters (label/conf filtering done in Python)."""
     conn = get_connection(config)
     try:
         with conn.cursor() as cursor:
-            clauses = []
-            params = []
+            clauses, params = [], []
 
             if object_label:
-                # JSON_SEARCH returns the path of the first match; IS NOT NULL means found.
                 clauses.append(
-                    "JSON_SEARCH(events, 'one', %s, NULL, '$[*].objects[*]') IS NOT NULL"
+                    "JSON_SEARCH(events, 'one', %s, NULL, '$[*].detections[*].label') IS NOT NULL"
+                    " OR JSON_SEARCH(events, 'one', %s, NULL, '$[*].objects[*]') IS NOT NULL"
                 )
-                params.append(object_label)
+                params += [object_label, object_label]
 
             if camera:
                 clauses.append("camera_id = %s")
@@ -101,7 +133,7 @@ def query(config, object_label, camera, disposition, after, before):
 
             where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
             cursor.execute(
-                f"SELECT file_key, camera_id, disposition, processed_at, events "
+                f"SELECT file_key, camera_id, disposition, processed_at, events, model_version "
                 f"FROM processed_files {where} ORDER BY processed_at DESC",
                 params
             )
@@ -110,21 +142,29 @@ def query(config, object_label, camera, disposition, after, before):
         conn.close()
 
 
-def _summarise_events(events_json):
-    """Return a compact label summary from a JSON events blob."""
-    try:
-        events = json.loads(events_json) if isinstance(events_json, str) else events_json
-        if not events:
-            return "—"
-        all_labels = []
-        for e in events:
-            all_labels.extend(e.get('objects', []))
-        counts = {}
-        for label in all_labels:
-            counts[label] = counts.get(label, 0) + 1
-        return ", ".join(f"{label}×{n}" if n > 1 else label for label, n in sorted(counts.items()))
-    except (json.JSONDecodeError, TypeError):
-        return "—"
+def _summarise(events: list, label_filter: str, min_conf: float) -> str:
+    """Compact per-clip detection summary, respecting confidence filter."""
+    counts = {}
+    for event in events:
+        detections = event.get('detections')
+        if detections is not None:
+            for d in detections:
+                if label_filter and d.get('label', '').lower() != label_filter.lower():
+                    continue
+                if d.get('confidence', 1.0) < min_conf:
+                    continue
+                counts[d['label']] = counts.get(d['label'], 0) + 1
+        else:
+            for obj in event.get('objects', []):
+                if label_filter and obj.lower() != label_filter.lower():
+                    continue
+                counts[obj] = counts.get(obj, 0) + 1
+    if not counts:
+        return '—'
+    return ', '.join(
+        f"{lbl}×{n}" if n > 1 else lbl
+        for lbl, n in sorted(counts.items())
+    )
 
 
 def main():
@@ -132,7 +172,9 @@ def main():
         description='Query processed_files for clips matching detection criteria.'
     )
     parser.add_argument('--object', metavar='LABEL',
-                        help='Object type to search for (e.g. person, car, truck)')
+                        help='Object type to search for (e.g. person, car, dog)')
+    parser.add_argument('--min-confidence', metavar='0.0-1.0', type=float, default=0.0,
+                        help='Minimum detection confidence (default: 0.0, show all)')
     parser.add_argument('--camera', choices=['F', 'B', 'L', 'R'],
                         help='Filter by camera ID')
     parser.add_argument('--disposition', choices=['archived', 'quarantined'],
@@ -158,6 +200,7 @@ def main():
 
     after_dt  = _parse_date(args.after)  if args.after  else None
     before_dt = _parse_date(args.before) + timedelta(days=1) if args.before else None
+    min_conf  = args.min_confidence
 
     rows = query(config,
                  object_label=args.object,
@@ -165,6 +208,13 @@ def main():
                  disposition=args.disposition,
                  after=after_dt,
                  before=before_dt)
+
+    # Apply confidence filter in Python (can't do it cleanly in SQL against nested JSON)
+    if args.object or min_conf > 0.0:
+        rows = [
+            r for r in rows
+            if _clip_matches(_parse_events(r[4]), args.object, min_conf)
+        ]
 
     if not rows:
         print("No matching clips found.")
@@ -174,9 +224,9 @@ def main():
     col_w = max(len(r[0]) for r in rows)
     print(f"  {'FILE':<{col_w}}  CAM  DISPOSITION   PROCESSED AT          DETECTIONS")
     print(f"  {'-'*col_w}  ---  ------------  --------------------  ----------")
-    for file_key, cam, disp, processed_at, events_json in rows:
-        ts = processed_at.strftime('%Y-%m-%d %H:%M:%S') if processed_at else '—'
-        summary = _summarise_events(events_json)
+    for file_key, cam, disp, processed_at, events_json, model_ver in rows:
+        ts      = processed_at.strftime('%Y-%m-%d %H:%M:%S') if processed_at else '—'
+        summary = _summarise(_parse_events(events_json), args.object, min_conf)
         print(f"  {file_key:<{col_w}}  {cam or '?':<3}  {disp:<12}  {ts}  {summary}")
     print()
 
