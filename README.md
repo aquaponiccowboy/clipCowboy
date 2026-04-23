@@ -101,12 +101,16 @@ python3 run_pipeline.py
 python3 sort_archive.py --dry-run   # preview counts first
 python3 sort_archive.py             # execute
 
-# 4. Browse results in MinIO browser, or query from the CLI
+# 4. Score clips by activity level
+python3 score_clips.py              # score all unscored clips
+python3 score_clips.py --top 20     # score and immediately show top 20
+
+# 5. Browse results in MinIO browser, or query from the CLI
 python3 query_detections.py --category people
 python3 query_detections.py --category vehicles --camera F
 python3 query_detections.py --object person --min-confidence 0.90
 
-# 5. Clean up quarantine when you're satisfied nothing was missed
+# 6. Clean up quarantine when you're satisfied nothing was missed
 python3 purge_quarantine.py --dry-run
 python3 purge_quarantine.py --yes
 ```
@@ -124,6 +128,31 @@ python3 sort_archive.py --resort           # re-sort everything after changing c
 ```
 
 Categories are defined in `config.yml` under `sort.categories`. Each maps a name to a list of YOLO labels. Clips matching multiple categories get a combined bin (`people+vehicles`). Clips with detections that match no category go to `other`.
+
+---
+
+### `score_clips.py` — rank clips by activity level
+
+Scores each archived clip 0–1 using the YOLO events already in the database. No video files are read. Weights are tunable in `config.yml` under `scoring.weights`.
+
+```bash
+python3 score_clips.py                    # score all unscored archived clips
+python3 score_clips.py --rescore          # rescore after tuning weights
+python3 score_clips.py --top 20           # score then show top 20
+python3 score_clips.py --list --top 20    # show top 20 without scoring
+python3 score_clips.py --list --min-score 0.7
+python3 score_clips.py --camera F --top 10
+```
+
+Score components (default weights in parentheses):
+
+| Component | Weight | What it measures |
+|---|---|---|
+| `detection_rate` | 0.35 | Fraction of clip seconds with at least one detection |
+| `avg_objects` | 0.25 | Mean simultaneous detections per second |
+| `label_diversity` | 0.20 | Distinct YOLO labels seen in the clip |
+| `mean_confidence` | 0.10 | Average detection confidence |
+| `temporal_coverage` | 0.10 | How evenly spread detections are across the clip |
 
 ---
 
