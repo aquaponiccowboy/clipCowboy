@@ -120,6 +120,19 @@ def ensure_schema(config: dict):
                     INDEX idx_hl_file (file_key)
                 )
             """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS scene_labels (
+                    id            INT AUTO_INCREMENT PRIMARY KEY,
+                    file_key      VARCHAR(512) NOT NULL,
+                    model_version VARCHAR(256) NOT NULL,
+                    scene         VARCHAR(128) NOT NULL,
+                    confidence    FLOAT        NOT NULL,
+                    scores        JSON,
+                    clip_model    VARCHAR(128) NOT NULL,
+                    classified_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_scene_file (file_key, model_version)
+                )
+            """)
 
         logging.info("Database schema verified.")
     finally:

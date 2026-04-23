@@ -38,6 +38,7 @@ python3 sort_archive.py --dry-run     # preview sort
 python3 sort_archive.py               # move clips into category bins
 python3 score_clips.py --top 20       # score by activity, show busiest 20
 python3 extract_highlights.py --min-score 0.4  # cut sub-clips from active windows
+python3 classify_scenes.py --min-score 0.4     # label scenes with CLIP
 python3 query_detections.py --category people --camera F
 python3 purge_quarantine.py --dry-run # review no-detection clips
 python3 purge_quarantine.py --yes     # delete them
@@ -109,6 +110,19 @@ python3 reprocess.py --glob "00011624_*"
 python3 reprocess.py --after 2026-03-01 --before 2026-03-31
 ```
 
+### `classify_scenes.py`
+```bash
+python3 classify_scenes.py                      # all unclassified archived clips
+python3 classify_scenes.py --min-score 0.3      # only above heuristic score threshold
+python3 classify_scenes.py --top 50             # top 50 by heuristic score
+python3 classify_scenes.py --camera F
+python3 classify_scenes.py --reclassify         # redo after editing prompts in config
+python3 classify_scenes.py --dry-run            # list clips without downloading
+python3 classify_scenes.py --list               # show stored labels
+python3 classify_scenes.py --list --scene construction_work
+```
+Prompts defined in `config.yml` under `scenes.prompts` — add/rename scenes freely, no retraining needed.
+
 ### `extract_highlights.py`
 ```bash
 python3 extract_highlights.py                   # all scored clips
@@ -175,5 +189,4 @@ DELETE FROM dlq_files WHERE file_key = 'problem_file.mp4';
 
 ## Roadmap
 
-- Temporal model scoring (X3D / VideoMAE) layered on top of heuristic scores
 - OpenClaw / Discord bot commands for pipeline status and alerts
