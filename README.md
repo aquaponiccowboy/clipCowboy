@@ -37,6 +37,7 @@ python3 run_pipeline.py
 python3 sort_archive.py --dry-run     # preview sort
 python3 sort_archive.py               # move clips into category bins
 python3 score_clips.py --top 20       # score by activity, show busiest 20
+python3 extract_highlights.py --min-score 0.4  # cut sub-clips from active windows
 python3 query_detections.py --category people --camera F
 python3 purge_quarantine.py --dry-run # review no-detection clips
 python3 purge_quarantine.py --yes     # delete them
@@ -53,6 +54,7 @@ python3 purge_quarantine.py --yes     # delete them
 | `archive` | `.MP4` clips with detections |
 | `annotated` | Bounding-box `.MP4` — only when `save_annotated: true` |
 | `quarantine` | No-detection clips — spot-check then purge |
+| `highlights` | Trimmed sub-clips from `extract_highlights.py` |
 
 After `sort_archive.py`:
 ```
@@ -106,6 +108,19 @@ python3 reprocess.py --camera L
 python3 reprocess.py --glob "00011624_*"
 python3 reprocess.py --after 2026-03-01 --before 2026-03-31
 ```
+
+### `extract_highlights.py`
+```bash
+python3 extract_highlights.py                   # all scored clips
+python3 extract_highlights.py --min-score 0.5   # skip low-activity clips
+python3 extract_highlights.py --top 50          # top 50 by score only
+python3 extract_highlights.py --camera F
+python3 extract_highlights.py --dry-run         # show windows, no ffmpeg
+python3 extract_highlights.py --re-extract      # redo already-extracted
+python3 extract_highlights.py --list            # show extracted highlights
+python3 extract_highlights.py --list --top 20 --min-score 0.4
+```
+Window parameters tunable in `config.yml` under `highlights` (min_duration · max_duration · merge_gap · pad · min_clip_score).
 
 ### `purge_quarantine.py`
 ```bash
@@ -161,5 +176,4 @@ DELETE FROM dlq_files WHERE file_key = 'problem_file.mp4';
 ## Roadmap
 
 - Temporal model scoring (X3D / VideoMAE) layered on top of heuristic scores
-- Highlight sub-clip extraction from high-score windows
 - OpenClaw / Discord bot commands for pipeline status and alerts

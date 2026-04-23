@@ -105,6 +105,21 @@ def ensure_schema(config: dict):
                     UNIQUE KEY uq_score (file_key, model_version)
                 )
             """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS highlights (
+                    id            INT AUTO_INCREMENT PRIMARY KEY,
+                    file_key      VARCHAR(512) NOT NULL,
+                    model_version VARCHAR(256) NOT NULL,
+                    highlight_key VARCHAR(512) NOT NULL,
+                    start_sec     FLOAT        NOT NULL,
+                    end_sec       FLOAT        NOT NULL,
+                    duration_sec  FLOAT        NOT NULL,
+                    window_score  FLOAT        NOT NULL,
+                    extracted_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_hl_key (highlight_key),
+                    INDEX idx_hl_file (file_key)
+                )
+            """)
 
         logging.info("Database schema verified.")
     finally:
