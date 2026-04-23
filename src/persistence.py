@@ -120,7 +120,8 @@ def commit_result(file_key: str, config: dict, result: dict, camera_id: str = No
                 ON DUPLICATE KEY UPDATE
                     has_objects  = VALUES(has_objects),
                     disposition  = VALUES(disposition),
-                    events       = VALUES(events)
+                    events       = VALUES(events),
+                    sort_prefix  = NULL
             """, (
                 file_key,
                 model_version,

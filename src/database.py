@@ -42,9 +42,7 @@ def ensure_schema(config: dict):
                 )
             """)
 
-            # Migration: add model_version to existing processed_files tables that
-            # predate this column. Existing rows are tagged with the current model
-            # path (reasonable assumption: they were run with whatever is configured).
+            # Migration: model_version column
             cursor.execute("""
                 SELECT COUNT(*) FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE()
@@ -63,6 +61,20 @@ def ensure_schema(config: dict):
                     "ADD UNIQUE KEY uq_file_model (file_key, model_version)"
                 )
                 logging.info("Migrated processed_files: added model_version column.")
+
+            # Migration: sort_prefix column (NULL = unsorted, set by sort_archive.py)
+            cursor.execute("""
+                SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME   = 'processed_files'
+                  AND COLUMN_NAME  = 'sort_prefix'
+            """)
+            if cursor.fetchone()[0] == 0:
+                cursor.execute(
+                    "ALTER TABLE processed_files "
+                    "ADD COLUMN sort_prefix VARCHAR(128) DEFAULT NULL"
+                )
+                logging.info("Migrated processed_files: added sort_prefix column.")
 
         logging.info("Database schema verified.")
     finally:
