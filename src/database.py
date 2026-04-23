@@ -15,18 +15,21 @@ def get_connection(config: dict):
 
 
 def ensure_schema(config: dict):
+    model_version = config.get('model', {}).get('path', 'models/yolov8n.pt')
     conn = get_connection(config)
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS processed_files (
-                    id           INT AUTO_INCREMENT PRIMARY KEY,
-                    file_key     VARCHAR(512) NOT NULL UNIQUE,
-                    camera_id    CHAR(1),
-                    has_objects  BOOLEAN NOT NULL,
-                    disposition  ENUM('archived', 'quarantined') NOT NULL,
-                    events       JSON,
-                    processed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    id            INT AUTO_INCREMENT PRIMARY KEY,
+                    file_key      VARCHAR(512) NOT NULL,
+                    model_version VARCHAR(256) NOT NULL DEFAULT '',
+                    camera_id     CHAR(1),
+                    has_objects   BOOLEAN NOT NULL,
+                    disposition   ENUM('archived', 'quarantined') NOT NULL,
+                    events        JSON,
+                    processed_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_file_model (file_key, model_version)
                 )
             """)
             cursor.execute("""
@@ -38,6 +41,29 @@ def ensure_schema(config: dict):
                     failed_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+
+            # Migration: add model_version to existing processed_files tables that
+            # predate this column. Existing rows are tagged with the current model
+            # path (reasonable assumption: they were run with whatever is configured).
+            cursor.execute("""
+                SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME   = 'processed_files'
+                  AND COLUMN_NAME  = 'model_version'
+            """)
+            if cursor.fetchone()[0] == 0:
+                cursor.execute(
+                    "ALTER TABLE processed_files "
+                    "ADD COLUMN model_version VARCHAR(256) NOT NULL DEFAULT %s",
+                    (model_version,)
+                )
+                cursor.execute("ALTER TABLE processed_files DROP INDEX file_key")
+                cursor.execute(
+                    "ALTER TABLE processed_files "
+                    "ADD UNIQUE KEY uq_file_model (file_key, model_version)"
+                )
+                logging.info("Migrated processed_files: added model_version column.")
+
         logging.info("Database schema verified.")
     finally:
         conn.close()

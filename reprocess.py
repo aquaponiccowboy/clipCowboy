@@ -81,12 +81,21 @@ def _apply_filters(objects, camera, glob_pattern, after, before):
 
 
 def _clear_db_records(keys, config):
-    """Remove processed_files and dlq_files rows so the pipeline treats these as new."""
+    """Clear DB state so the pipeline treats these files as new for the current model.
+
+    processed_files: only the current-model row is deleted — rows from previous
+    model versions are preserved as history.
+    dlq_files: always cleared so the watcher doesn't skip the file.
+    """
+    model_version = config.get('model', {}).get('path', 'models/yolov8n.pt')
     conn = get_connection(config)
     try:
         with conn.cursor() as cursor:
             for key in keys:
-                cursor.execute("DELETE FROM processed_files WHERE file_key = %s", (key,))
+                cursor.execute(
+                    "DELETE FROM processed_files WHERE file_key = %s AND model_version = %s",
+                    (key, model_version)
+                )
                 cursor.execute("DELETE FROM dlq_files WHERE file_key = %s", (key,))
     finally:
         conn.close()

@@ -20,6 +20,27 @@ from src.queue_client import get_channel, publish, TRANSCODE_QUEUE, ANALYZE_QUEU
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# Keys published this watcher process session, mapped to the monotonic time of
+# publication. Prevents duplicate queue messages when a scan overlaps with slow
+# processing (file still in input/converted but not yet in processed_files).
+_in_flight: dict[str, float] = {}
+
+
+def _prune_in_flight(ttl: float):
+    now = time.monotonic()
+    expired = [k for k, t in _in_flight.items() if now - t > ttl]
+    for k in expired:
+        del _in_flight[k]
+
+
+def _is_in_flight(key: str, ttl: float) -> bool:
+    t = _in_flight.get(key)
+    return t is not None and time.monotonic() - t < ttl
+
+
+def _mark_in_flight(key: str):
+    _in_flight[key] = time.monotonic()
+
 
 def load_config(path='config.yml'):
     with open(path) as f:
@@ -46,6 +67,8 @@ def _already_converted(ts_key: str, config: dict) -> bool:
 def scan_and_publish(config: dict):
     conn, ch = get_channel(config)
     queued = 0
+    ttl = config.get('watcher', {}).get('inflight_ttl', 600)
+    _prune_in_flight(ttl)
 
     try:
         # Phase 1: raw .TS files → transcode queue
@@ -60,12 +83,16 @@ def scan_and_publish(config: dict):
             if _already_converted(ts_key, config):
                 # Converted but not analyzed — handled by Phase 2
                 continue
+            if _is_in_flight(ts_key, ttl):
+                logging.debug(f"Skipping in-flight file: {ts_key}")
+                continue
 
             context = get_camera_context(ts_key, config)
             if not context:
                 continue
 
             publish(ch, TRANSCODE_QUEUE, {'ts_key': ts_key, 'camera_id': context['id']})
+            _mark_in_flight(ts_key)
             logging.info(f"Queued for transcode: {ts_key}")
             queued += 1
 
@@ -76,12 +103,16 @@ def scan_and_publish(config: dict):
             if is_in_dlq(mp4_key, config):
                 logging.debug(f"Skipping DLQ'd file: {mp4_key}")
                 continue
+            if _is_in_flight(mp4_key, ttl):
+                logging.debug(f"Skipping in-flight file: {mp4_key}")
+                continue
 
             context = get_camera_context(mp4_key, config)
             if not context:
                 continue
 
             publish(ch, ANALYZE_QUEUE, {'mp4_key': mp4_key, 'camera_id': context['id']})
+            _mark_in_flight(mp4_key)
             logging.info(f"Queued for analysis (recovery): {mp4_key}")
             queued += 1
 
