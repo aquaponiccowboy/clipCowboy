@@ -59,6 +59,21 @@ sort:
     animals:
       labels: [dog, cat, bird, horse, cow, sheep, bear, elephant, zebra, giraffe]
 
+# Heuristic activity scoring for score_clips.py.
+# Weights must sum to 1.0. Adjust to emphasise what matters most for your footage.
+#   detection_rate    — fraction of clip seconds with at least one detection
+#   avg_objects       — mean simultaneous detections per second (normalised to 3)
+#   label_diversity   — distinct YOLO labels seen (normalised to 3)
+#   mean_confidence   — average detection confidence
+#   temporal_coverage — how evenly spread detections are across the clip
+scoring:
+  weights:
+    detection_rate:    0.35
+    avg_objects:       0.25
+    label_diversity:   0.20
+    mean_confidence:   0.10
+    temporal_coverage: 0.10
+
 # Named recognition — Step 2.
 # Set enabled: true after enrolling subjects via `python3 enroll.py`.
 # threshold is cosine similarity (0–1); 0.50 is a reasonable starting point.

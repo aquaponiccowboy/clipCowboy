@@ -88,6 +88,23 @@ def ensure_schema(config: dict):
                     INDEX idx_gallery_cat (category)
                 )
             """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS clip_scores (
+                    id                INT AUTO_INCREMENT PRIMARY KEY,
+                    file_key          VARCHAR(512) NOT NULL,
+                    model_version     VARCHAR(256) NOT NULL,
+                    score             FLOAT        NOT NULL,
+                    n_events          INT          NOT NULL,
+                    duration_sec      FLOAT,
+                    detection_rate    FLOAT,
+                    avg_objects       FLOAT,
+                    label_diversity   INT,
+                    mean_confidence   FLOAT,
+                    temporal_coverage FLOAT,
+                    scored_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_score (file_key, model_version)
+                )
+            """)
 
         logging.info("Database schema verified.")
     finally:
