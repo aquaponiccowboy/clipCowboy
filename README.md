@@ -172,6 +172,61 @@ python3 purge_quarantine.py --before 2026-01-01 --yes
 
 ---
 
+## Named Recognition (Step 2)
+
+Named recognition identifies known individuals and routes clips into per-person bins within each category:
+
+```
+archive/
+  people/
+    Zeke/           ← recognized clips
+    Zeke+Neighbor/  ← clips with both recognized
+    (root)          ← unrecognized persons
+  vehicles/
+    BlueTruck/
+```
+
+Recognition runs during analysis when `recognition.enabled: true` in `config.yml`. Set `recognition.threshold` to tune sensitivity (cosine similarity, 0–1).
+
+### `enroll.py` — register known individuals
+
+Point it at any reference video or image. YOLO finds the detections, the embedding model encodes them, and they're stored in the gallery DB table.
+
+```bash
+# Enroll from a video clip (samples up to 30 frames)
+python3 enroll.py --name Zeke --category people --from reference.mp4
+
+# Enroll from a still image
+python3 enroll.py --name BlueTruck --category vehicles --from truck.jpg
+
+# Limit frame sampling
+python3 enroll.py --name Zeke --category people --from clip.mp4 --max-frames 60
+
+# See who's enrolled and how many samples each has
+python3 enroll.py --list
+
+# Remove someone from the gallery
+python3 enroll.py --remove --name Zeke --category people
+```
+
+After enrolling, set `recognition.enabled: true` in `config.yml` and restart workers. Re-run `sort_archive.py --resort` to re-sort already-processed clips with the new names.
+
+### Recognition models
+
+| Category | Model | Notes |
+|---|---|---|
+| `people` | InsightFace buffalo_l (ArcFace) | Face-based; returns `None` if no face visible |
+| `vehicles` | OpenCLIP ViT-B-32 | Visual appearance embedding |
+| `animals` | OpenCLIP ViT-B-32 | Visual appearance embedding |
+
+Install recognition dependencies (not included in base requirements):
+
+```bash
+pip install insightface onnxruntime-gpu open-clip-torch
+```
+
+---
+
 ## Camera IDs
 
 Four cameras identified by the last character before the file extension:
@@ -203,7 +258,6 @@ To remove a file from the DLQ and allow reprocessing, delete its row from `dlq_f
 
 ## Roadmap
 
-- **Step 2** — Named recognition: person re-ID (InsightFace / torchreid), vehicle matching, per-individual named bins
-- **Enrollment CLI** — point at reference clips to register known individuals
 - **Scene / situation detection** — temporal models for activity recognition
 - **Content editing pipeline** — highlight reel generation, cross-clip search by person
+- **OpenClaw / Discord integration** — bot commands for pipeline status, query, and alerts

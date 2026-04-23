@@ -59,6 +59,22 @@ sort:
     animals:
       labels: [dog, cat, bird, horse, cow, sheep, bear, elephant, zebra, giraffe]
 
+# Named recognition — Step 2.
+# Set enabled: true after enrolling subjects via `python3 enroll.py`.
+# threshold is cosine similarity (0–1); 0.50 is a reasonable starting point.
+# insightface uses ArcFace face embeddings; clip uses OpenCLIP ViT-B-32 visual embeddings.
+# Restart workers after changing this section — gallery is cached per worker process.
+recognition:
+  enabled: false
+  threshold: 0.50
+  categories:
+    people:
+      model: insightface
+    vehicles:
+      model: clip
+    animals:
+      model: clip
+
 # Spatial masks — one entry per camera ID (last char before extension in filename).
 # Vertices are [x, y] pixels at 640x480. Only detections whose bounding-box
 # centre falls inside the polygon are kept.

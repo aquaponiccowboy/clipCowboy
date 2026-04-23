@@ -3,8 +3,35 @@ import numpy as np
 import logging
 import os
 from ultralytics import YOLO
+from src import gallery as gallery_mod
+from src import recognizer
 
 _model = None
+_gallery_cache: dict = {}   # (category, embed_model_key) → {name: unit_emb}
+
+
+def _build_label_category_map(config) -> dict:
+    """Reverse-map YOLO label → sort category name, e.g. 'person' → 'people'."""
+    result = {}
+    for cat, cfg in config.get('sort', {}).get('categories', {}).items():
+        for label in cfg.get('labels', []):
+            result[label.lower()] = cat
+    return result
+
+
+def _get_gallery(category: str, config: dict) -> dict:
+    rec = config.get('recognition', {})
+    cat_cfg = rec.get('categories', {}).get(category, {})
+    model_key = cat_cfg.get('model', 'clip')
+    embed_model = (
+        'insightface/buffalo_l' if model_key == 'insightface'
+        else 'open_clip/ViT-B-32'
+    )
+    cache_key = (category, embed_model)
+    if cache_key not in _gallery_cache:
+        _gallery_cache[cache_key] = gallery_mod.load_gallery(category, embed_model, config)
+        logging.info(f"Gallery loaded: {category} — {len(_gallery_cache[cache_key])} subject(s)")
+    return _gallery_cache[cache_key]
 
 
 def _get_model(model_path: str = 'models/yolov8n.pt'):
@@ -42,6 +69,12 @@ def detect_objects(mp4_path: str, mask_config: dict, config: dict) -> dict:
     debug = model_cfg.get('debug', False)
     debug_dir = model_cfg.get('debug_dir', 'debug')
     save_annotated = model_cfg.get('save_annotated', False)
+
+    rec = config.get('recognition', {})
+    recognition_enabled = rec.get('enabled', False)
+    rec_threshold = float(rec.get('threshold', 0.50))
+    rec_cat_cfgs = rec.get('categories', {})
+    label_category_map = _build_label_category_map(config) if recognition_enabled else {}
 
     annotated_path = mp4_path.replace('.mp4', '_annotated.mp4')
 
@@ -120,17 +153,30 @@ def detect_objects(mp4_path: str, mask_config: dict, config: dict) -> dict:
 
             if (frame_count - last_logged_frame) >= fps:
                 time_sec = round(frame_count / fps, 1)
+                det_list = []
+                for lbl, det_conf, xyxy in kept_boxes:
+                    det = {
+                        "label":      lbl,
+                        "confidence": round(float(det_conf), 3),
+                        "box":        [round(v, 1) for v in xyxy],
+                    }
+                    if recognition_enabled:
+                        cat = label_category_map.get(lbl.lower())
+                        if cat:
+                            gal = _get_gallery(cat, config)
+                            emb, _ = recognizer.get_embedding(
+                                frame, xyxy, cat, rec_cat_cfgs.get(cat, {})
+                            )
+                            if emb is not None:
+                                name, sim = gallery_mod.match(emb, gal, rec_threshold)
+                                if name:
+                                    det['name'] = name
+                                    det['similarity'] = sim
+                    det_list.append(det)
                 result["events"].append({
                     "time":       f"{time_sec}s",
                     "frame":      frame_count,
-                    "detections": [
-                        {
-                            "label":      label,
-                            "confidence": round(float(conf), 3),
-                            "box":        [round(v, 1) for v in xyxy],
-                        }
-                        for label, conf, xyxy in kept_boxes
-                    ],
+                    "detections": det_list,
                 })
                 last_logged_frame = frame_count
                 logging.warning(f"Objects at {time_sec}s: {[b[0] for b in kept_boxes]}")

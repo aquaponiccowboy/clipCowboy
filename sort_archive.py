@@ -80,6 +80,15 @@ def _labels_in_clip(events):
     return labels
 
 
+def _build_label_category_map(config) -> dict:
+    """'person' → 'people', 'car' → 'vehicles', etc."""
+    result = {}
+    for cat, cfg in config.get('sort', {}).get('categories', {}).items():
+        for label in cfg.get('labels', []):
+            result[label.lower()] = cat
+    return result
+
+
 def _determine_prefix(labels, category_map):
     """Map a set of labels to a sort prefix. Returns e.g. 'people+vehicles'."""
     matched = sorted(
@@ -87,6 +96,18 @@ def _determine_prefix(labels, category_map):
         if labels & label_set
     )
     return '+'.join(matched) if matched else 'other'
+
+
+def _names_for_category(events: list, category: str, label_category_map: dict) -> set:
+    """Collect distinct recognized names from detections that map to `category`."""
+    names = set()
+    for event in events:
+        for det in event.get('detections', []):
+            if label_category_map.get(det.get('label', '').lower()) == category:
+                name = det.get('name')
+                if name:
+                    names.add(name)
+    return names
 
 
 def _fetch_unsorted(config, resort):
@@ -151,6 +172,9 @@ def main():
 
     print(f"Categories: {', '.join(sorted(category_map))}")
 
+    recognition_enabled = config.get('recognition', {}).get('enabled', False)
+    label_category_map = _build_label_category_map(config) if recognition_enabled else {}
+
     rows = _fetch_unsorted(config, args.resort)
     if not rows:
         print("No unsorted archived clips found.")
@@ -159,8 +183,17 @@ def main():
     # Build sort plan: prefix → [(id, file_key, current_prefix)]
     plan = {}
     for row_id, file_key, current_prefix, events_json in rows:
-        labels = _labels_in_clip(_parse_events(events_json))
+        events = _parse_events(events_json)
+        labels = _labels_in_clip(events)
         prefix = _determine_prefix(labels, category_map)
+
+        # Named sub-prefix: only for single-category clips when recognition is on.
+        # people/Zeke/ or people/Zeke+Neighbor/ rather than people/
+        if recognition_enabled and '+' not in prefix and prefix != 'other':
+            names = _names_for_category(events, prefix, label_category_map)
+            if names:
+                prefix = f"{prefix}/{'+'.join(sorted(names))}"
+
         plan.setdefault(prefix, []).append((row_id, file_key, current_prefix))
 
     total = sum(len(v) for v in plan.values())

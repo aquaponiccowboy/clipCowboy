@@ -76,6 +76,19 @@ def ensure_schema(config: dict):
                 )
                 logging.info("Migrated processed_files: added sort_prefix column.")
 
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS gallery (
+                    id          INT AUTO_INCREMENT PRIMARY KEY,
+                    name        VARCHAR(128)  NOT NULL,
+                    category    VARCHAR(64)   NOT NULL,
+                    embedding   MEDIUMBLOB    NOT NULL,
+                    embed_model VARCHAR(128)  NOT NULL,
+                    source_file VARCHAR(512),
+                    enrolled_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_gallery_cat (category)
+                )
+            """)
+
         logging.info("Database schema verified.")
     finally:
         conn.close()
