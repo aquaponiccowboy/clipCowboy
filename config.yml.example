@@ -60,6 +60,31 @@ sort:
     animals:
       labels: [dog, cat, bird, horse, cow, sheep, bear, elephant, zebra, giraffe]
 
+# Zero-shot scene classification for classify_scenes.py.
+# Uses OpenCLIP (ViT-B-32) — no training data required.
+# Add, remove, or rename scenes freely. Each scene gets a list of text prompts;
+# the highest cosine similarity across all prompts wins for that scene.
+# n_frames: frames sampled per clip (more = slower but more accurate)
+scenes:
+  n_frames: 8
+  prompts:
+    construction_work:
+      - "person doing construction work"
+      - "person using power tools or hand tools"
+      - "building or framing construction activity"
+    material_handling:
+      - "person carrying lumber or building materials"
+      - "loading or unloading materials from a vehicle"
+      - "stacking or moving construction supplies"
+    arrival:
+      - "person walking toward the camera arriving"
+      - "vehicle arriving and parking"
+      - "person getting out of a truck or car"
+    idle:
+      - "empty outdoor scene with no people"
+      - "person standing still not working"
+      - "quiet scene minimal activity"
+
 # Heuristic activity scoring for score_clips.py.
 # Weights must sum to 1.0. Adjust to emphasise what matters most for your footage.
 #   detection_rate    — fraction of clip seconds with at least one detection
