@@ -32,7 +32,7 @@ SCORE_TABLES = [
     'highlights',
     'scene_labels',
 ]
-MINIO_BUCKETS = ['converted', 'processed']
+MINIO_BUCKETS = ['converted', 'archive', 'annotated', 'quarantine', 'highlights']
 
 
 def load_config(path='config.yml'):
