@@ -9,8 +9,9 @@ def init_logging(worker_name: str, level: int = logging.INFO) -> None:
         level=level,
         format='%(asctime)s - %(levelname)s - %(message)s',
     )
-    url = os.getenv('DISCORD_LOG_WEBHOOK_URL', '').strip()
-    if url:
-        handler = DiscordHandler(url, worker_name)
+    token = os.getenv('DISCORD_BOT_TOKEN', '').strip()
+    channel_id = os.getenv('DISCORD_LOG_CHANNEL_ID', '').strip()
+    if token and channel_id:
+        handler = DiscordHandler(token, channel_id, worker_name)
         handler.setLevel(logging.INFO)
         logging.getLogger().addHandler(handler)

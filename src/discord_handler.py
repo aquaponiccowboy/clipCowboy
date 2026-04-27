@@ -1,5 +1,4 @@
 import logging
-import os
 import queue
 import threading
 import time
@@ -12,6 +11,7 @@ except ImportError:
 _DRAIN_INTERVAL = 1.5   # seconds between Discord POSTs
 _MAX_BATCH = 15          # lines per message
 _CHAR_LIMIT = 2000
+_API_BASE = 'https://discord.com/api/v10'
 
 _LEVEL_ICON = {
     logging.DEBUG:    '🔍',
@@ -23,9 +23,10 @@ _LEVEL_ICON = {
 
 
 class DiscordHandler(logging.Handler):
-    def __init__(self, webhook_url: str, worker_name: str):
+    def __init__(self, bot_token: str, channel_id: str, worker_name: str):
         super().__init__()
-        self._url = webhook_url
+        self._url = f'{_API_BASE}/channels/{channel_id}/messages'
+        self._headers = {'Authorization': f'Bot {bot_token}', 'Content-Type': 'application/json'}
         self._worker = worker_name
         self._q: queue.Queue = queue.Queue()
         t = threading.Thread(target=self._drain_loop, daemon=True)
@@ -57,11 +58,10 @@ class DiscordHandler(logging.Handler):
             return
         text = '\n'.join(lines)[:_CHAR_LIMIT]
         try:
-            r = _requests.post(self._url, json={'content': text}, timeout=5)
+            r = _requests.post(self._url, headers=self._headers, json={'content': text}, timeout=5)
             if r.status_code == 429:
                 retry_after = r.json().get('retry_after', 2)
                 time.sleep(retry_after)
-                # put lines back for next drain cycle
                 for line in lines:
                     self._q.put_nowait(line)
         except Exception:
