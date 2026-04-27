@@ -22,6 +22,7 @@ temp_*
 minio_data/
 mariadb_data/
 rabbitmq_data/
+bot_data/
 
 # Environment Variables / Secrets
 .env

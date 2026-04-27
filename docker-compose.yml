@@ -87,10 +87,9 @@ services:
       - SC_DB_PASSWORD=${MYSQL_PASSWORD}
 
     volumes:
-      - bot_data:/home/node/.openclaw   # openclaw config and state
-      - ./bot:/workspace                # bot scripts — tracked in this repo
+      - ./bot_data:/home/node/.openclaw  # bind mount — avoids named volume root ownership issue
+      - ./bot:/workspace                 # bot scripts — tracked in this repo
 
 
 volumes:
   rabbitmq_data:
-  bot_data:
