@@ -45,6 +45,36 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
 
+  pipeline:
+    build: .
+    container_name: footage_pipeline
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - default
+      - comfycowboy_default
+    depends_on:
+      - mariadb
+      - minio
+      - rabbitmq
+    env_file:
+      - .env
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_LOG_CHANNEL_ID=${DISCORD_LOG_CHANNEL_ID}
+      - PIPELINE_CONTROL_PORT=8765
+    ports:
+      - "8765:8765"
+    volumes:
+      - ./config.yml:/app/config.yml:ro
+      - pipeline_models:/root/.cache   # YOLO + CLIP model cache across rebuilds
+
   bot:
     image: ghcr.io/openclaw/openclaw:latest
     container_name: footage_bot
@@ -91,8 +121,8 @@ services:
       - SC_DB_USER=${MYSQL_USER}
       - SC_DB_PASSWORD=${MYSQL_PASSWORD}
 
-      # Pipeline control server — reset_pipeline.py --serve runs on host at this URL
-      - PIPELINE_CONTROL_URL=${PIPELINE_CONTROL_URL}
+      # Pipeline control server — resolves via Docker service name
+      - PIPELINE_CONTROL_URL=http://pipeline:8765
 
     volumes:
       - ./bot_data:/home/node/.openclaw                  # bind mount — avoids named volume root ownership issue
@@ -101,3 +131,4 @@ services:
 
 volumes:
   rabbitmq_data:
+  pipeline_models:
