@@ -16,7 +16,6 @@ import logging
 import os
 import sys
 import yaml
-import boto3
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse, parse_qs
 from src.database import ensure_schema
@@ -42,13 +41,8 @@ def load_config(path='config.yml'):
 
 
 def _get_conn(config):
-    import mysql.connector
-    db = config['database']
-    return mysql.connector.connect(
-        host=db['host'], port=db.get('port', 3306),
-        user=db['user'], password=db['password'],
-        database=db['name'],
-    )
+    from src.database import get_connection
+    return get_connection(config)
 
 
 def row_counts(config) -> dict:
@@ -89,6 +83,7 @@ def do_reset(config, scores=False, minio=False) -> dict:
 
 
 def _clear_minio(config) -> dict:
+    import boto3
     s = config.get('storage', {})
     client = boto3.client(
         's3',
