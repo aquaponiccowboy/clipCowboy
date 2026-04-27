@@ -83,15 +83,9 @@ def do_reset(config, scores=False, minio=False) -> dict:
 
 
 def _clear_minio(config) -> dict:
-    import boto3
+    from src.persistence import _get_s3_client
+    client = _get_s3_client(config)
     s = config.get('storage', {})
-    client = boto3.client(
-        's3',
-        endpoint_url=s.get('endpoint'),
-        aws_access_key_id=s.get('access_key'),
-        aws_secret_access_key=s.get('secret_key'),
-        region_name=s.get('region', 'us-east-1'),
-    )
     result = {}
     for bucket_key in MINIO_BUCKETS:
         bucket = s.get('buckets', {}).get(bucket_key)
