@@ -17,8 +17,7 @@ from src.transcoder import transcode
 from src.persistence import record_dlq, ensure_buckets
 from src.database import ensure_schema
 from src.queue_client import get_channel, publish, TRANSCODE_QUEUE, ANALYZE_QUEUE, TRANSCODE_DLQ
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+from src.logging_setup import init_logging
 
 config = {}
 
@@ -69,6 +68,7 @@ def handle(ch, method, properties, body):
 
 if __name__ == '__main__':
     config = load_config()
+    init_logging('transcode')
     ensure_schema(config)
     ensure_buckets(config)
     conn, ch = get_channel(config)

@@ -17,8 +17,7 @@ from src.ingestion import get_raw_keys, get_converted_keys
 from src.persistence import is_processed, is_in_dlq
 from src.router import get_camera_context
 from src.queue_client import get_channel, publish, TRANSCODE_QUEUE, ANALYZE_QUEUE
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+from src.logging_setup import init_logging
 
 # Keys published this watcher process session, mapped to the monotonic time of
 # publication. Prevents duplicate queue messages when a scan overlaps with slow
@@ -124,6 +123,7 @@ def scan_and_publish(config: dict):
 
 if __name__ == '__main__':
     config = load_config()
+    init_logging('watcher')
     interval = config.get('watcher', {}).get('scan_interval', 60)
     logging.info(f"Watcher started. Scanning every {interval}s.")
 
