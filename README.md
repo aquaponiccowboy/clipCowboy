@@ -2,15 +2,16 @@
 
 4-camera dashcam pipeline: `.TS` → transcode → YOLO → sort → score. Built for processing ~2 TB of tiny-home build footage.
 
-**Stack:** RabbitMQ · MinIO · MariaDB · YOLOv8 · Docker
+**Stack:** RabbitMQ · MinIO · MariaDB · YOLOv8 · OpenClaw · Docker
 
 ---
 
 ## Setup
 
 ```bash
-docker-compose up -d                  # start MariaDB, MinIO, RabbitMQ
+docker-compose up -d                  # start MariaDB, MinIO, RabbitMQ, bot
 cp config.yml.example config.yml      # fill in credentials, model path, masks
+cp .env.example .env                  # fill in DB/MinIO/Discord/OpenClaw tokens
 pip install -r requirements.txt
 python3 setup.py                      # create buckets, verify DB schema
 ```
@@ -187,6 +188,19 @@ DELETE FROM dlq_files WHERE file_key = 'problem_file.mp4';
 
 ---
 
+## Bot (Discord)
+
+OpenClaw runs as the `bot` service in docker-compose. Bot scripts live in `bot/` and are mounted as `/workspace` inside the container.
+
+```bash
+docker compose logs -f bot            # watch bot logs
+docker compose restart bot            # reload after config changes
+```
+
+Bot commands are defined in `bot/` — see that directory for available commands once connected.
+
+---
+
 ## Roadmap
 
-- OpenClaw / Discord bot commands for pipeline status and alerts
+- Discord bot commands: pipeline status, score queries, scene search, highlight delivery
