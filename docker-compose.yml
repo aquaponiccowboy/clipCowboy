@@ -92,8 +92,8 @@ services:
       - SC_DB_PASSWORD=${MYSQL_PASSWORD}
 
     volumes:
-      - ./bot_data:/home/node/.openclaw  # bind mount — avoids named volume root ownership issue
-      - ./bot:/workspace                 # bot scripts — tracked in this repo
+      - ./bot_data:/home/node/.openclaw                  # bind mount — avoids named volume root ownership issue
+      - ./bot:/home/node/.openclaw/workspace             # workspace files tracked in repo, overrides bot_data/workspace
 
 
 volumes:
