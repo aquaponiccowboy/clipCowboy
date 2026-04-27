@@ -91,6 +91,9 @@ services:
       - SC_DB_USER=${MYSQL_USER}
       - SC_DB_PASSWORD=${MYSQL_PASSWORD}
 
+      # Pipeline control server — reset_pipeline.py --serve runs on host at this URL
+      - PIPELINE_CONTROL_URL=${PIPELINE_CONTROL_URL}
+
     volumes:
       - ./bot_data:/home/node/.openclaw                  # bind mount — avoids named volume root ownership issue
       - ./bot:/home/node/.openclaw/workspace             # workspace files tracked in repo, overrides bot_data/workspace
