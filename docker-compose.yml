@@ -60,6 +60,11 @@ services:
     env_file:
       - .env
     environment:
+      # Disable bonjour/mDNS — multicast doesn't work on Docker bridge networks
+      # and the CIAO unhandled rejection crashes the process
+      - OPENCLAW_PLUGIN_BONJOUR_ENABLED=false
+      - OPENCLAW_DISABLE_BONJOUR=true
+
       # OpenClaw platform auth — run `openclaw auth token` on host to get this
       - OPENCLAW_AUTH_TOKEN=${OPENCLAW_AUTH_TOKEN}
 
