@@ -1,3 +1,7 @@
+networks:
+  comfycowboy_default:
+    external: true   # ollama lives here — remove this block if you don't use ollama
+
 services:
   mariadb:
     image: mariadb:lts
@@ -41,7 +45,52 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
 
+  bot:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: footage_bot
+    restart: unless-stopped
+    networks:
+      - default              # mariadb, minio, rabbitmq are on this network
+      - comfycowboy_default  # ollama is here — remove if unused
+    ports:
+      - "18789:18789"
+    depends_on:
+      - mariadb
+      - minio
+    env_file:
+      - .env
+    environment:
+      # OpenClaw platform auth — run `openclaw auth token` on host to get this
+      - OPENCLAW_AUTH_TOKEN=${OPENCLAW_AUTH_TOKEN}
+
+      # Discord bot token — discord.com/developers → your app → Bot → Token
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+
+      # Ollama — on comfycowboy_default network (remove if unused)
+      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_API_KEY=dummy-key-bypass
+
+      # Gemini optional fallback LLM
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+
+      # MinIO — service name resolves within this compose network
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - MINIO_BUCKET=openclaw
+
+      # SecurityCowboy DB — same credentials as the pipeline workers
+      - SC_DB_HOST=mariadb
+      - SC_DB_PORT=3306
+      - SC_DB_NAME=footage_metadata
+      - SC_DB_USER=${MYSQL_USER}
+      - SC_DB_PASSWORD=${MYSQL_PASSWORD}
+
+    volumes:
+      - bot_data:/home/node/.openclaw   # openclaw config and state
+      - ./bot:/workspace                # bot scripts — tracked in this repo
+
 
 volumes:
   rabbitmq_data:
-
+  bot_data:
