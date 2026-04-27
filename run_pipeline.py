@@ -20,6 +20,7 @@ WORKERS = [
     ('watcher',    ['watcher.py']),
     ('transcode',  ['worker_transcode.py']),
     ('analyze',    ['worker_analyze.py']),
+    ('control',    ['reset_pipeline.py', '--serve']),
 ]
 
 # Pad labels so columns line up
