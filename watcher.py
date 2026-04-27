@@ -17,7 +17,7 @@ from src.ingestion import get_raw_keys, get_converted_keys
 from src.persistence import is_processed, is_in_dlq
 from src.router import get_camera_context
 from src.queue_client import get_channel, publish, TRANSCODE_QUEUE, ANALYZE_QUEUE
-from src.logging_setup import init_logging
+from src.logging_setup import init_logging, discord_notify
 
 # Keys published this watcher process session, mapped to the monotonic time of
 # publication. Prevents duplicate queue messages when a scan overlaps with slow
@@ -132,6 +132,7 @@ if __name__ == '__main__':
             queued = scan_and_publish(config)
             if queued:
                 logging.info(f"Published {queued} job(s) to queues.")
+                discord_notify(f"▸ **[watcher]** queued {queued} new job{'s' if queued != 1 else ''}")
             else:
                 logging.info("Nothing new to queue.")
         except Exception as e:

@@ -17,7 +17,7 @@ from src.transcoder import transcode
 from src.persistence import record_dlq, ensure_buckets
 from src.database import ensure_schema
 from src.queue_client import get_channel, publish, TRANSCODE_QUEUE, ANALYZE_QUEUE, TRANSCODE_DLQ
-from src.logging_setup import init_logging
+from src.logging_setup import init_logging, discord_notify
 
 config = {}
 
@@ -49,6 +49,7 @@ def handle(ch, method, properties, body):
         # Publish to analyze queue whether we just converted or it already existed
         publish(ch, ANALYZE_QUEUE, {'mp4_key': mp4_key, 'camera_id': camera_id})
         logging.info(f"Queued for analysis: {mp4_key}")
+        discord_notify(f"▸ **[transcode]** {ts_key} → {mp4_key}")
 
         ch.basic_ack(delivery_tag=method.delivery_tag)
 

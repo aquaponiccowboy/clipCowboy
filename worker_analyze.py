@@ -18,7 +18,7 @@ from src.router import get_camera_context
 from src.persistence import is_processed, commit_result, record_dlq, ensure_buckets
 from src.database import ensure_schema
 from src.queue_client import get_channel, publish, ANALYZE_QUEUE, ANALYZE_DLQ
-from src.logging_setup import init_logging
+from src.logging_setup import init_logging, discord_notify
 
 config = {}
 
@@ -59,6 +59,9 @@ def handle(ch, method, properties, body):
 
         result = detect_objects(local_mp4, context['mask_config'], config)
         commit_result(mp4_key, config, result, camera_id=camera_id)
+
+        n = len(result.get('events', []))
+        discord_notify(f"▸ **[analyze]** {mp4_key} — {n} event{'s' if n != 1 else ''}")
 
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
