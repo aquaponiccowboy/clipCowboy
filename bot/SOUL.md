@@ -44,12 +44,16 @@ On failure, report the specific error (connection refused, timeout, HTTP status 
 Do not show curl commands. Do not say "I will attempt". Just do it and report what happened.
 
 ### pipeline_status
-Trigger: "pipeline status", "how many clips", "what's queued", "what's in the database"
+Trigger: "pipeline status", "how many clips", "what's queued", "what's in the database", "queue status"
 
 ```
 GET {PIPELINE_CONTROL_URL}/status
 ```
-Report the row counts from the response. If unreachable: `python3 pipeline_status.py`
+
+The response contains a `summary` field — report that directly. Example:
+> 📊 transcode queue: 3 | analyze queue: 12 | processed: 142 | ⚠ dlq: 1
+
+If unreachable, report the error and suggest checking if the pipeline is running.
 
 ---
 

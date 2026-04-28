@@ -122,7 +122,10 @@ def scan_and_publish(config: dict):
 if __name__ == '__main__':
     config = load_config()
     init_logging('watcher')
-    interval = config.get('watcher', {}).get('scan_interval', 60)
+    watcher_cfg = config.get('watcher', {})
+    interval        = watcher_cfg.get('scan_interval', 60)
+    status_interval = watcher_cfg.get('status_interval', 0)  # 0 = disabled
+    last_status     = 0.0
     logging.info(f"Watcher started. Scanning every {interval}s.")
 
     while True:
@@ -135,5 +138,14 @@ if __name__ == '__main__':
                 logging.info("Nothing new to queue.")
         except Exception as e:
             logging.error(f"Watcher scan failed: {e}")
+
+        if status_interval > 0 and (time.time() - last_status) >= status_interval:
+            try:
+                from reset_pipeline import status_summary, format_status_notify
+                summary = status_summary(config)
+                discord_notify(format_status_notify(summary))
+                last_status = time.time()
+            except Exception as e:
+                logging.error(f"Periodic status notification failed: {e}")
 
         time.sleep(interval)

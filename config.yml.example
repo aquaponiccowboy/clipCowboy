@@ -55,6 +55,7 @@ model:
 watcher:
   scan_interval: 60                 # seconds between MinIO scans
   inflight_ttl:  600                # seconds to suppress re-publishing an in-flight file
+  status_interval: 0                # seconds between periodic Discord status posts (0 = disabled)
 
 # Content-based sorting for sort_archive.py.
 # Each category maps a friendly name to the YOLO labels that belong to it.

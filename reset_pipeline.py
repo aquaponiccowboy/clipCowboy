@@ -27,6 +27,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 from src.database import ensure_schema
 from src.logging_setup import init_logging, discord_notify
+from src.queue_client import get_queue_depths, TRANSCODE_QUEUE, ANALYZE_QUEUE, TRANSCODE_DLQ, ANALYZE_DLQ
 from src.config import load_config
 
 DEFAULT_URL = os.getenv('PIPELINE_CONTROL_URL', 'http://localhost:8765')
@@ -50,6 +51,32 @@ MINIO_BUCKETS = ['converted', 'archive', 'annotated', 'quarantine', 'highlights'
 def _get_conn(config):
     from src.database import get_connection
     return get_connection(config)
+
+
+def status_summary(config) -> dict:
+    """Combined queue depths + DB row counts for the /status endpoint."""
+    counts = row_counts(config)
+    try:
+        depths = get_queue_depths(config)
+    except Exception as e:
+        depths = {'error': str(e)}
+    return {'db': counts, 'queues': depths}
+
+
+def format_status_notify(summary: dict) -> str:
+    db = summary.get('db', {})
+    queues = summary.get('queues', {})
+    transcode = queues.get(TRANSCODE_QUEUE, '?')
+    analyze   = queues.get(ANALYZE_QUEUE, '?')
+    dlq       = (queues.get(TRANSCODE_DLQ, 0) or 0) + (queues.get(ANALYZE_DLQ, 0) or 0)
+    processed = db.get('processed_files', '?')
+    dlq_db    = db.get('dlq_files', 0) or 0
+    dlq_total = (dlq or 0) + dlq_db
+    dlq_str   = f" | ⚠ dlq: {dlq_total}" if dlq_total else ""
+    return (
+        f"📊 **[status]** transcode queue: {transcode} | "
+        f"analyze queue: {analyze} | processed: {processed}{dlq_str}"
+    )
 
 
 def row_counts(config) -> dict:
@@ -139,7 +166,8 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if urlparse(self.path).path == '/status':
-            self._respond(200, {'counts': row_counts(self.config)})
+            summary = status_summary(self.config)
+            self._respond(200, {**summary, 'summary': format_status_notify(summary)})
         else:
             self._respond(404, {'error': 'not found'})
 
