@@ -18,6 +18,7 @@ storage:
     annotated:  security-camera-annotated    # annotated MP4s (only when save_annotated: true)
     quarantine: security-camera-quarantine   # no-detection clips for review/deletion
     highlights: security-camera-highlights   # trimmed sub-clips from extract_highlights.py
+    event_clips: security-camera-event-clips # clean clips cut around each detection event
 
 database:
   host: localhost
@@ -41,6 +42,13 @@ model:
   # When true, clips with no detections are deleted from MinIO instead of moved
   # to the quarantine bucket. Use this once you trust your confidence threshold.
   discard_empty: false
+  # Automatically extract clean (no annotation) clips around each detection event.
+  # pad: seconds of buffer before and after each event
+  # merge_gap: merge events within this many seconds into one clip
+  event_clips:
+    enabled: false
+    pad: 2
+    merge_gap: 4
   debug: false
   debug_dir: debug                  # accepts absolute paths, e.g. /mnt/c/Users/you/Desktop/debug-frames
 

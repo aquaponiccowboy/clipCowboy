@@ -42,7 +42,7 @@ SCORE_TABLES = [
     'highlights',
     'scene_labels',
 ]
-MINIO_BUCKETS = ['converted', 'archive', 'annotated', 'quarantine', 'highlights']
+MINIO_BUCKETS = ['converted', 'archive', 'annotated', 'quarantine', 'highlights', 'event_clips']
 
 
 

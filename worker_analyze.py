@@ -19,6 +19,7 @@ from src.persistence import is_processed, commit_result, record_dlq, ensure_buck
 from src.database import ensure_schema
 from src.queue_client import get_channel, publish, ANALYZE_QUEUE, ANALYZE_DLQ
 from src.logging_setup import init_logging, discord_notify
+from src.event_clipper import extract_event_clips
 from src.config import load_config
 
 config = {}
@@ -59,6 +60,11 @@ def handle(ch, method, properties, body):
         commit_result(mp4_key, config, result, camera_id=camera_id)
 
         n = len(result.get('events', []))
+
+        if config.get('model', {}).get('event_clips', {}).get('enabled') and n > 0:
+            n_clips = extract_event_clips(local_mp4, mp4_key, result['events'], config)
+            logging.info(f"Extracted {n_clips} event clip(s) for {mp4_key}")
+
         discord_notify(f"▸ **[analyze]** {mp4_key} — {n} event{'s' if n != 1 else ''}")
 
         ch.basic_ack(delivery_tag=method.delivery_tag)
