@@ -97,8 +97,15 @@ def detect_objects(mp4_path: str, mask_config: dict, config: dict) -> dict:
 
     out = None
     if save_annotated:
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(annotated_path, fourcc, fps, (width, height))
+        for codec in ('avc1', 'mp4v', 'XVID'):
+            fourcc = cv2.VideoWriter_fourcc(*codec)
+            out = cv2.VideoWriter(annotated_path, fourcc, fps, (width, height))
+            if out.isOpened():
+                logging.info(f"Annotated writer opened with codec={codec}")
+                break
+            out = None
+        if out is None:
+            logging.warning("Could not open VideoWriter for annotated output — skipping annotation")
 
     frame_count = 0
     last_logged_frame = -999
