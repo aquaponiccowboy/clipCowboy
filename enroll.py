@@ -23,6 +23,7 @@ import cv2
 from src.database import ensure_schema
 from src.gallery import store_embedding, list_enrolled, remove_enrolled
 from src.recognizer import get_embedding
+from src.config import load_config
 
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s %(levelname)s %(message)s')
 
@@ -37,9 +38,6 @@ _CATEGORY_LABELS = {
 _IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
 
 
-def load_config(path='config.yml'):
-    with open(path) as f:
-        return yaml.safe_load(f)
 
 
 def _sample_frames(path: str, max_frames: int) -> list:

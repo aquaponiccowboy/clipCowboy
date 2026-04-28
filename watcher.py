@@ -18,6 +18,7 @@ from src.persistence import is_processed, is_in_dlq
 from src.router import get_camera_context
 from src.queue_client import get_channel, publish, TRANSCODE_QUEUE, ANALYZE_QUEUE
 from src.logging_setup import init_logging, discord_notify
+from src.config import load_config
 
 # Keys published this watcher process session, mapped to the monotonic time of
 # publication. Prevents duplicate queue messages when a scan overlaps with slow
@@ -41,9 +42,6 @@ def _mark_in_flight(key: str):
     _in_flight[key] = time.monotonic()
 
 
-def load_config(path='config.yml'):
-    with open(path) as f:
-        return yaml.safe_load(f)
 
 
 def _already_converted(ts_key: str, config: dict) -> bool:

@@ -18,13 +18,11 @@ from src.persistence import record_dlq, ensure_buckets
 from src.database import ensure_schema
 from src.queue_client import get_channel, publish, TRANSCODE_QUEUE, ANALYZE_QUEUE, TRANSCODE_DLQ
 from src.logging_setup import init_logging, discord_notify
+from src.config import load_config
 
 config = {}
 
 
-def load_config(path='config.yml'):
-    with open(path) as f:
-        return yaml.safe_load(f)
 
 
 MAX_ATTEMPTS = 3

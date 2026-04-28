@@ -20,6 +20,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse, parse_qs
 from src.database import ensure_schema
 from src.logging_setup import init_logging, discord_notify
+from src.config import load_config
 
 CONTROL_PORT = int(os.getenv('PIPELINE_CONTROL_PORT', '8765'))
 
@@ -35,9 +36,6 @@ SCORE_TABLES = [
 MINIO_BUCKETS = ['converted', 'archive', 'annotated', 'quarantine', 'highlights']
 
 
-def load_config(path='config.yml'):
-    with open(path) as f:
-        return yaml.safe_load(f)
 
 
 def _get_conn(config):

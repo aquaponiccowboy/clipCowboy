@@ -9,19 +9,14 @@ connectivity.  Run this once before starting the pipeline workers.
 """
 import sys
 import logging
-import yaml
 import boto3
 from botocore.exceptions import ClientError
 
+from src.config import load_config
 from src.database import ensure_schema
 from src.queue_client import get_channel
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
-
-
-def load_config(path: str = 'config.yml') -> dict:
-    with open(path) as f:
-        return yaml.safe_load(f)
 
 
 def setup_minio(config: dict) -> bool:

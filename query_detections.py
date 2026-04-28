@@ -29,11 +29,9 @@ import yaml
 from datetime import datetime, timedelta, timezone
 
 from src.database import get_connection
+from src.config import load_config
 
 
-def load_config(path='config.yml'):
-    with open(path) as f:
-        return yaml.safe_load(f)
 
 
 def _parse_date(s):

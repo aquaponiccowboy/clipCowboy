@@ -33,13 +33,11 @@ import boto3
 from botocore.exceptions import ClientError
 
 from src.database import get_connection
+from src.config import load_config
 
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s %(levelname)s %(message)s')
 
 
-def load_config(path='config.yml'):
-    with open(path) as f:
-        return yaml.safe_load(f)
 
 
 def _get_s3(config):

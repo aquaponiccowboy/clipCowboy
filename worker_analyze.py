@@ -19,13 +19,11 @@ from src.persistence import is_processed, commit_result, record_dlq, ensure_buck
 from src.database import ensure_schema
 from src.queue_client import get_channel, publish, ANALYZE_QUEUE, ANALYZE_DLQ
 from src.logging_setup import init_logging, discord_notify
+from src.config import load_config
 
 config = {}
 
 
-def load_config(path='config.yml'):
-    with open(path) as f:
-        return yaml.safe_load(f)
 
 
 MAX_ATTEMPTS = 3

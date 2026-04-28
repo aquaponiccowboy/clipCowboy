@@ -26,11 +26,9 @@ import yaml
 import boto3
 from datetime import datetime, timedelta, timezone
 from botocore.exceptions import ClientError
+from src.config import load_config
 
 
-def load_config(path='config.yml'):
-    with open(path) as f:
-        return yaml.safe_load(f)
 
 
 def _get_s3(config):

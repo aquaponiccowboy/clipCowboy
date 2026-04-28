@@ -14,20 +14,15 @@ import sys
 import time
 
 import boto3
-import yaml
 from botocore.exceptions import ClientError
 
+from src.config import load_config
 from src.database import get_connection
 from src.queue_client import ANALYZE_QUEUE, TRANSCODE_QUEUE, get_channel
 
 logging.basicConfig(level=logging.CRITICAL)
 
 _CLEAR = '\033[2J\033[H'   # ANSI: clear screen + move cursor to top
-
-
-def load_config(path: str = 'config.yml') -> dict:
-    with open(path) as f:
-        return yaml.safe_load(f)
 
 
 def queue_depths(config: dict) -> dict:

@@ -69,6 +69,11 @@ services:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - DISCORD_LOG_CHANNEL_ID=${DISCORD_LOG_CHANNEL_ID}
       - PIPELINE_CONTROL_PORT=8765
+      # Service host overrides — config.yml uses localhost defaults; these
+      # point workers at the correct Docker service names at runtime.
+      - DATABASE_HOST=mariadb
+      - MINIO_ENDPOINT=http://minio:9000
+      - RABBITMQ_HOST=rabbitmq
     ports:
       - "8765:8765"
     volumes:
