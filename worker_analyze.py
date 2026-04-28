@@ -64,8 +64,11 @@ def handle(ch, method, properties, body):
         if config.get('model', {}).get('event_clips', {}).get('enabled') and n > 0:
             n_clips = extract_event_clips(local_mp4, mp4_key, result['events'], config)
             logging.info(f"Extracted {n_clips} event clip(s) for {mp4_key}")
+        else:
+            n_clips = 0
 
-        discord_notify(f"▸ **[analyze]** {mp4_key} — {n} event{'s' if n != 1 else ''}")
+        clip_note = f", {n_clips} clip{'s' if n_clips != 1 else ''}" if n_clips else ""
+        discord_notify(f"▸ **[analyze]** {mp4_key} — {n} event{'s' if n != 1 else ''}{clip_note}")
 
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
