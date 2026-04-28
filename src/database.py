@@ -26,7 +26,7 @@ def ensure_schema(config: dict):
                     model_version VARCHAR(256) NOT NULL DEFAULT '',
                     camera_id     CHAR(1),
                     has_objects   BOOLEAN NOT NULL,
-                    disposition   ENUM('archived', 'quarantined') NOT NULL,
+                    disposition   ENUM('archived', 'quarantined', 'discarded') NOT NULL,
                     events        JSON,
                     processed_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE KEY uq_file_model (file_key, model_version)
@@ -61,6 +61,21 @@ def ensure_schema(config: dict):
                     "ADD UNIQUE KEY uq_file_model (file_key, model_version)"
                 )
                 logging.info("Migrated processed_files: added model_version column.")
+
+            # Migration: disposition ENUM widened to include 'discarded'
+            cursor.execute("""
+                SELECT COLUMN_TYPE FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME   = 'processed_files'
+                  AND COLUMN_NAME  = 'disposition'
+            """)
+            row = cursor.fetchone()
+            if row and b'discarded' not in row[0] and 'discarded' not in row[0]:
+                cursor.execute(
+                    "ALTER TABLE processed_files "
+                    "MODIFY COLUMN disposition ENUM('archived','quarantined','discarded') NOT NULL"
+                )
+                logging.info("Migrated processed_files: widened disposition ENUM.")
 
             # Migration: sort_prefix column (NULL = unsorted, set by sort_archive.py)
             cursor.execute("""

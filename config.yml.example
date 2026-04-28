@@ -38,6 +38,9 @@ model:
   # Set true only while tuning — writes an annotated copy alongside the raw archive.
   # Leave false in normal operation; raw MP4s are always retained for future reprocessing.
   save_annotated: false
+  # When true, clips with no detections are deleted from MinIO instead of moved
+  # to the quarantine bucket. Use this once you trust your confidence threshold.
+  discard_empty: false
   debug: false
   debug_dir: debug                  # accepts absolute paths, e.g. /mnt/c/Users/you/Desktop/debug-frames
 

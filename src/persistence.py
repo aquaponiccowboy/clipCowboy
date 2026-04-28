@@ -101,9 +101,10 @@ def commit_result(file_key: str, config: dict, result: dict, camera_id: str = No
     annotated_bucket  = buckets['annotated']
     quarantine_bucket = buckets['quarantine']
 
-    has_objects   = result.get('has_objects', False)
-    disposition   = 'archived' if has_objects else 'quarantined'
-    model_version = config.get('model', {}).get('path', 'models/yolov8n.pt')
+    has_objects    = result.get('has_objects', False)
+    discard_empty  = config.get('model', {}).get('discard_empty', False)
+    disposition    = 'archived' if has_objects else ('discarded' if discard_empty else 'quarantined')
+    model_version  = config.get('model', {}).get('path', 'models/yolov8n.pt')
 
     # Phase 1: DB record first.
     # If this fails the file stays in `converted` and the worker retries cleanly.
@@ -156,6 +157,9 @@ def commit_result(file_key: str, config: dict, result: dict, camera_id: str = No
                 s3.upload_file(local_path, annotated_bucket, file_key)
                 os.remove(local_path)
 
+        elif discard_empty:
+            logging.info(f"NO ACTION: Discarding {file_key} (discard_empty=true).")
+
         else:
             logging.info(f"NO ACTION: Moving {file_key} to quarantine for spot-checking.")
             s3.copy_object(
@@ -164,7 +168,7 @@ def commit_result(file_key: str, config: dict, result: dict, camera_id: str = No
                 Key=file_key
             )
 
-        # File is confirmed in archive or quarantine — remove from converted.
+        # File is confirmed in archive, quarantine, or discarded — remove from converted.
         s3.delete_object(Bucket=converted_bucket, Key=file_key)
 
     except ClientError as e:
