@@ -19,17 +19,22 @@ Trigger: "factory reset", "reset pipeline", "clear history", "start fresh", "wip
 Clear the pipeline's processed-file history so test clips re-run from scratch.
 The gallery (enrolled persons/pets/objects) is NEVER cleared.
 
-Make an HTTP POST to the pipeline control server:
+Execute the HTTP call. Do not show the command. Report the result.
+
 ```
 POST {PIPELINE_CONTROL_URL}/reset
 {"scores": true, "minio": false}
 ```
+
 Use `"minio": true` if the user says "full reset" or mentions buckets.
 
-If the control server is unreachable or PIPELINE_CONTROL_URL is not set, reply:
-> Control server unreachable. Run on the host:
-> `python3 reset_pipeline.py --confirm --scores`
-> Add `--minio` to also clear MinIO buckets.
+On success, report exactly what was cleared using the response JSON. Example:
+> Reset complete — cleared 142 processed_files, 38 dlq_files, 142 clip_scores. Gallery untouched.
+
+On failure, report the specific error (connection refused, timeout, HTTP status code). Example:
+> Reset failed — connection refused at http://pipeline:8765. Is the pipeline running?
+
+Do not show curl commands. Do not say "I will attempt". Just do it and report what happened.
 
 ### pipeline_status
 Trigger: "pipeline status", "how many clips", "what's queued", "what's in the database"
