@@ -19,14 +19,21 @@ Trigger: "factory reset", "reset pipeline", "clear history", "start fresh", "wip
 Clear the pipeline's processed-file history so test clips re-run from scratch.
 The gallery (enrolled persons/pets/objects) is NEVER cleared.
 
+Build the JSON payload based on flags in the user's message:
+- `scores` field: always `true`
+- `minio` field: `true` if message contains `--minio` or "full reset" or "wipe buckets", otherwise `false`
+
+Examples:
+- "factory reset" → `{"scores": true, "minio": false}`
+- "factory reset --minio" → `{"scores": true, "minio": true}`
+- "full reset" → `{"scores": true, "minio": true}`
+
 Execute the HTTP call. Do not show the command. Report the result.
 
 ```
 POST {PIPELINE_CONTROL_URL}/reset
 {"scores": true, "minio": false}
 ```
-
-Use `"minio": true` if the user says "full reset" or mentions buckets.
 
 On success, report exactly what was cleared using the response JSON. Example:
 > Reset complete — cleared 142 processed_files, 38 dlq_files, 142 clip_scores. Gallery untouched.
