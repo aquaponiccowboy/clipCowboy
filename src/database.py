@@ -70,7 +70,7 @@ def ensure_schema(config: dict):
                   AND COLUMN_NAME  = 'disposition'
             """)
             row = cursor.fetchone()
-            if row and b'discarded' not in row[0] and 'discarded' not in row[0]:
+            if row and 'discarded' not in row[0]:
                 cursor.execute(
                     "ALTER TABLE processed_files "
                     "MODIFY COLUMN disposition ENUM('archived','quarantined','discarded') NOT NULL"
