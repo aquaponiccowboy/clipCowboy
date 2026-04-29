@@ -130,8 +130,35 @@ services:
       - PIPELINE_CONTROL_URL=http://pipeline:8765
 
     volumes:
-      - ./bot_data:/home/node/.openclaw                  # bind mount — avoids named volume root ownership issue
-      - ./bot:/home/node/.openclaw/workspace             # workspace files tracked in repo, overrides bot_data/workspace
+      - ./bot_data:/home/node/.openclaw
+      - ./bot:/home/node/.openclaw/workspace
+
+  # ─── New bot template ─────────────────────────────────────────────────────
+  # Copy this block for each new bot. Replace every occurrence of:
+  #   bot-template  → bot-<name>          (service name)
+  #   footage_template → footage_<name>   (container name)
+  #   BOT_TEMPLATE  → BOT_<NAME>          (env var prefix)
+  #   bots/template → bots/<name>         (workspace/data paths)
+  # Then run: ./new-bot.sh <name>  and follow the printed steps.
+  #
+  # bot-template:
+  #   image: ghcr.io/openclaw/openclaw:latest
+  #   container_name: footage_template
+  #   restart: unless-stopped
+  #   networks:
+  #     - default
+  #     - comfycowboy_default
+  #   env_file: .env
+  #   environment:
+  #     - OPENCLAW_DISABLE_BONJOUR=1
+  #     - OPENCLAW_AUTH_TOKEN=${OPENCLAW_AUTH_TOKEN}
+  #     - DISCORD_BOT_TOKEN=${BOT_TEMPLATE_TOKEN}
+  #     - GEMINI_API_KEY=${GEMINI_API_KEY}
+  #     - OLLAMA_HOST=http://ollama:11434
+  #     - OLLAMA_API_KEY=dummy-key-bypass
+  #   volumes:
+  #     - ./bots/template/data:/home/node/.openclaw
+  #     - ./bots/template/workspace:/home/node/.openclaw/workspace
 
 
 volumes:
