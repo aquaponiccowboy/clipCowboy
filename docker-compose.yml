@@ -107,7 +107,7 @@ services:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
 
       # Additional bot tokens — one per bot registered in OpenClaw accounts
-      - BOT_GEMINI_FAST_TOKEN=${BOT_GEMINI_FAST_TOKEN}
+      - DISCORD_BOT_TOKEN_GEMINIFAST=${DISCORD_BOT_TOKEN_GEMINIFAST}
 
       # Ollama — on comfycowboy_default network (remove if unused)
       - OLLAMA_HOST=http://ollama:11434
