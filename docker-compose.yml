@@ -101,11 +101,7 @@ services:
       # Discord bot token — discord.com/developers → your app → Bot → Token
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
 
-      # Ollama — on comfycowboy_default network (remove if unused)
-      - OLLAMA_HOST=http://ollama:11434
-      - OLLAMA_API_KEY=dummy-key-bypass
-
-      # Gemini optional fallback LLM
+      # Gemini LLM
       - GEMINI_API_KEY=${GEMINI_API_KEY}
 
       # MinIO — service name resolves within this compose network
@@ -125,8 +121,8 @@ services:
       - PIPELINE_CONTROL_URL=http://pipeline:8765
 
     volumes:
-      - ./bot_data:/home/node/.openclaw                  # bind mount — avoids named volume root ownership issue
-      - ./bot:/home/node/.openclaw/workspace             # workspace files tracked in repo, overrides bot_data/workspace
+      - ./bot_data:/home/node/.openclaw
+      - ./bot:/home/node/.openclaw/workspace
 
 
 volumes:
