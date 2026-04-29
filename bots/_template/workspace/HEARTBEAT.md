@@ -1,1 +1,0 @@
-Reply: HEARTBEAT_OK
