@@ -12,6 +12,7 @@ Usage:
   python3 reset_pipeline.py --confirm                # wipe processing history + DLQ
   python3 reset_pipeline.py --confirm --scores       # also clear scores/highlights/scenes
   python3 reset_pipeline.py --confirm --minio        # also clear MinIO output buckets
+  python3 reset_pipeline.py --confirm --queues       # also purge RabbitMQ queues
   python3 reset_pipeline.py --url http://host:8765   # target a remote pipeline
   python3 reset_pipeline.py --direct                 # bypass HTTP, connect to DB directly
   python3 reset_pipeline.py --serve                  # run HTTP control server on port 8765
@@ -93,7 +94,23 @@ def row_counts(config) -> dict:
     return counts
 
 
-def do_reset(config, scores=False, minio=False) -> dict:
+def _purge_queues(config) -> dict:
+    from src.queue_client import get_channel
+    conn, ch = get_channel(config)
+    result = {}
+    try:
+        for queue in [TRANSCODE_QUEUE, ANALYZE_QUEUE, TRANSCODE_DLQ, ANALYZE_DLQ]:
+            try:
+                r = ch.queue_purge(queue)
+                result[queue] = r.method.message_count
+            except Exception as e:
+                result[queue] = f'error: {e}'
+    finally:
+        conn.close()
+    return result
+
+
+def do_reset(config, scores=False, minio=False, queues=False) -> dict:
     conn = _get_conn(config)
     cur = conn.cursor()
     cleared = {}
@@ -112,6 +129,9 @@ def do_reset(config, scores=False, minio=False) -> dict:
 
     if minio:
         cleared['minio'] = _clear_minio(config)
+
+    if queues:
+        cleared['queues'] = _purge_queues(config)
 
     return cleared
 
@@ -142,9 +162,12 @@ def _clear_minio(config) -> dict:
 def _format_summary(cleared: dict) -> str:
     lines = ['Pipeline reset complete:']
     for k, v in cleared.items():
-        if isinstance(v, dict):
+        if k == 'minio' and isinstance(v, dict):
             for bk, bv in v.items():
                 lines.append(f'  minio/{bk}: {bv} objects deleted')
+        elif k == 'queues' and isinstance(v, dict):
+            for qk, qv in v.items():
+                lines.append(f'  queue/{qk}: {qv} messages purged')
         else:
             lines.append(f'  {k}: {v} rows cleared')
     return '\n'.join(lines)
@@ -181,8 +204,9 @@ class _Handler(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(length) or b'{}')
         scores = bool(body.get('scores', False))
         minio  = bool(body.get('minio', False))
+        queues = bool(body.get('queues', False))
 
-        cleared = do_reset(self.config, scores=scores, minio=minio)
+        cleared = do_reset(self.config, scores=scores, minio=minio, queues=queues)
         summary = _format_summary(cleared)
         logging.info(summary)
         discord_notify(f"🔄 **[reset]** {summary}")
@@ -200,15 +224,11 @@ def _http_status(url: str) -> None:
     req = urllib.request.Request(f'{url}/status')
     with urllib.request.urlopen(req, timeout=5) as resp:
         data = json.loads(resp.read())
-    counts = data.get('counts', {})
-    print('\nCurrent row counts (gallery preserved):')
-    for t, n in counts.items():
-        marker = '  [protected]' if t == 'gallery' else ''
-        print(f'  {t}: {n}{marker}')
+    print('\n' + data.get('summary', json.dumps(data.get('db', {}), indent=2)))
 
 
-def _http_reset(url: str, scores: bool, minio: bool) -> None:
-    body = json.dumps({'scores': scores, 'minio': minio}).encode()
+def _http_reset(url: str, scores: bool, minio: bool, queues: bool) -> None:
+    body = json.dumps({'scores': scores, 'minio': minio, 'queues': queues}).encode()
     req = urllib.request.Request(
         f'{url}/reset', data=body,
         headers={'Content-Type': 'application/json'}, method='POST'
@@ -226,6 +246,8 @@ def main():
                         help='Also clear clip_scores, highlights, scene_labels')
     parser.add_argument('--minio', action='store_true',
                         help='Also delete objects in MinIO output buckets')
+    parser.add_argument('--queues', action='store_true',
+                        help='Also purge RabbitMQ transcode/analyze queues')
     parser.add_argument('--url', default=DEFAULT_URL,
                         help=f'Pipeline control server URL (default: {DEFAULT_URL})')
     parser.add_argument('--direct', action='store_true',
@@ -253,7 +275,7 @@ def main():
         if not args.confirm:
             print('\nDry-run. Pass --confirm to execute.')
             return
-        cleared = do_reset(config, scores=args.scores, minio=args.minio)
+        cleared = do_reset(config, scores=args.scores, minio=args.minio, queues=args.queues)
         print('\n' + _format_summary(cleared))
         return
 
@@ -270,7 +292,7 @@ def main():
         return
 
     try:
-        _http_reset(args.url, scores=args.scores, minio=args.minio)
+        _http_reset(args.url, scores=args.scores, minio=args.minio, queues=args.queues)
     except urllib.error.URLError as e:
         print(f'\nReset failed: {e.reason}')
         sys.exit(1)

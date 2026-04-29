@@ -22,11 +22,13 @@ The gallery (enrolled persons/pets/objects) is NEVER cleared.
 Build the JSON payload based on flags in the user's message:
 - `scores` field: always `true`
 - `minio` field: `true` if message contains `--minio` or "full reset" or "wipe buckets", otherwise `false`
+- `queues` field: `true` if message contains `--queues` or "full reset" or "clear queue", otherwise `false`
 
 Examples:
-- "factory reset" → `{"scores": true, "minio": false}`
-- "factory reset --minio" → `{"scores": true, "minio": true}`
-- "full reset" → `{"scores": true, "minio": true}`
+- "factory reset" → `{"scores": true, "minio": false, "queues": false}`
+- "factory reset --minio" → `{"scores": true, "minio": true, "queues": false}`
+- "factory reset --queues" → `{"scores": true, "minio": false, "queues": true}`
+- "full reset" → `{"scores": true, "minio": true, "queues": true}`
 
 Execute the HTTP call. Do not show the command. Report the result.
 
