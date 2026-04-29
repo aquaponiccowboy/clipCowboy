@@ -109,11 +109,7 @@ services:
       # Additional bot tokens — one per bot registered in OpenClaw accounts
       - DISCORD_BOT_TOKEN_GEMINIFAST=${DISCORD_BOT_TOKEN_GEMINIFAST}
 
-      # Ollama — on comfycowboy_default network (remove if unused)
-      - OLLAMA_HOST=http://ollama:11434
-      - OLLAMA_API_KEY=dummy-key-bypass
-
-      # Gemini optional fallback LLM
+      # Gemini LLM
       - GEMINI_API_KEY=${GEMINI_API_KEY}
 
       # MinIO — service name resolves within this compose network
