@@ -68,7 +68,9 @@ def handle(ch, method, properties, body):
             n_clips = 0
 
         clip_note = f", {n_clips} clip{'s' if n_clips != 1 else ''}" if n_clips else ""
-        discord_notify(f"▸ **[analyze]** {mp4_key} — {n} event{'s' if n != 1 else ''}{clip_note}")
+        labels = sorted({d['label'] for e in result.get('events', []) for d in e.get('detections', [])})
+        label_note = f" [{', '.join(labels)}]" if labels else ""
+        discord_notify(f"▸ **[analyze]** {mp4_key} — {n} event{'s' if n != 1 else ''}{clip_note}{label_note}")
 
         ch.basic_ack(delivery_tag=method.delivery_tag)
 

@@ -190,7 +190,7 @@ def detect_objects(mp4_path: str, mask_config: dict, config: dict) -> dict:
                     "detections": det_list,
                 })
                 last_logged_frame = frame_count
-                logging.warning(f"Objects at {time_sec}s: {[b[0] for b in kept_boxes]}")
+                logging.info(f"Objects at {time_sec}s: {[b[0] for b in kept_boxes]}")
 
             # Draw kept boxes on the output frame
             for label, bconf, (x1, y1, x2, y2) in kept_boxes:
