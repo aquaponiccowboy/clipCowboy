@@ -36,6 +36,20 @@ def get_raw_keys(config: dict) -> list:
         return []
 
 
+def get_input_mp4_keys(config: dict) -> list:
+    """Return .mp4 files from the input bucket (content footage — skip transcoding)."""
+    s3 = _get_s3_client(config)
+    bucket = config['storage']['buckets']['input']
+    try:
+        keys = _scan_bucket(s3, bucket, '.mp4')
+        if keys:
+            logging.info(f"Input bucket: {len(keys)} .MP4 files found (content footage).")
+        return keys
+    except ClientError as e:
+        logging.error(f"Ingestion error scanning input bucket for MP4s: {e}")
+        return []
+
+
 def get_converted_keys(config: dict) -> list:
     """Return .MP4 files from the converted bucket (ready for analysis)."""
     s3 = _get_s3_client(config)

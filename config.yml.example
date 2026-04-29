@@ -145,6 +145,11 @@ recognition:
 # Vertices are [x, y] pixels at 640x480. Only detections whose bounding-box
 # centre falls inside the polygon are kept.
 filters:
+  # Catch-all for content footage (GoPro, phone, any unrecognized filename).
+  # null vertices = full frame, no spatial filtering.
+  default:
+    spatial_mask:
+      vertices: null
   F:
     spatial_mask:
       vertices: [[0, 0], [640, 0], [640, 408], [0, 408]]

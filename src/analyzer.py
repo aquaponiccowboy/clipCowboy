@@ -43,7 +43,9 @@ def _get_model(model_path: str = 'models/yolov8n.pt'):
 
 
 def _box_in_polygon(box_xyxy, polygon) -> bool:
-    """Return True if the center of the bounding box is inside the polygon."""
+    """Return True if box center is inside polygon, or always True if polygon is None (full frame)."""
+    if polygon is None:
+        return True
     x1, y1, x2, y2 = box_xyxy
     cx = int((x1 + x2) / 2)
     cy = int((y1 + y2) / 2)
@@ -93,7 +95,8 @@ def detect_objects(mp4_path: str, mask_config: dict, config: dict) -> dict:
         f"~{total_frames} frames, conf={conf}"
     )
 
-    vertices = np.array(mask_config['vertices'], np.int32)
+    vertices_raw = mask_config.get('vertices')
+    vertices = np.array(vertices_raw, np.int32) if vertices_raw is not None else None
 
     out = None
     if save_annotated:
@@ -129,7 +132,8 @@ def detect_objects(mp4_path: str, mask_config: dict, config: dict) -> dict:
             dbg_name = os.path.splitext(os.path.basename(mp4_path))[0]
             cv2.imwrite(os.path.join(debug_dir, f"{dbg_name}_raw.jpg"), frame)
             overlay = frame.copy()
-            cv2.polylines(overlay, [vertices], True, (0, 255, 0), 2)
+            if vertices is not None:
+                cv2.polylines(overlay, [vertices], True, (0, 255, 0), 2)
             cv2.imwrite(os.path.join(debug_dir, f"{dbg_name}_mask_overlay.jpg"), overlay)
             logging.info(f"Debug frames saved to {debug_dir}/{dbg_name}_*.jpg")
 

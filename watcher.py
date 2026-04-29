@@ -13,7 +13,7 @@ import logging
 import time
 import boto3
 from botocore.exceptions import ClientError
-from src.ingestion import get_raw_keys, get_converted_keys
+from src.ingestion import get_raw_keys, get_converted_keys, get_input_mp4_keys
 from src.persistence import is_processed, is_in_dlq
 from src.router import get_camera_context
 from src.queue_client import get_channel, publish, TRANSCODE_QUEUE, ANALYZE_QUEUE
@@ -42,6 +42,29 @@ def _mark_in_flight(key: str):
     _in_flight[key] = time.monotonic()
 
 
+
+
+def _move_to_converted(mp4_key: str, config: dict) -> bool:
+    """Copy an MP4 from input to converted bucket then delete from input."""
+    storage = config.get('storage', {})
+    s3 = boto3.client('s3',
+        endpoint_url=storage.get('endpoint_url'),
+        aws_access_key_id=storage.get('access_key'),
+        aws_secret_access_key=storage.get('secret_key'),
+        region_name=storage.get('region_name', 'us-east-1')
+    )
+    try:
+        s3.copy_object(
+            CopySource={'Bucket': storage['buckets']['input'], 'Key': mp4_key},
+            Bucket=storage['buckets']['converted'],
+            Key=mp4_key,
+        )
+        s3.delete_object(Bucket=storage['buckets']['input'], Key=mp4_key)
+        logging.info(f"Moved {mp4_key} from input to converted (no transcode needed)")
+        return True
+    except Exception as e:
+        logging.error(f"Failed to move {mp4_key} to converted: {e}")
+        return False
 
 
 def _already_converted(ts_key: str, config: dict) -> bool:
@@ -92,6 +115,18 @@ def scan_and_publish(config: dict):
             _mark_in_flight(ts_key)
             logging.info(f"Queued for transcode: {ts_key}")
             queued += 1
+
+        # Phase 1b: MP4s in input bucket → move to converted, Phase 2 will queue for analysis
+        for mp4_key in get_input_mp4_keys(config):
+            if is_processed(mp4_key, config):
+                continue
+            if is_in_dlq(mp4_key, config):
+                continue
+            if _is_in_flight(mp4_key, ttl):
+                continue
+            if _move_to_converted(mp4_key, config):
+                _mark_in_flight(mp4_key)
+                queued += 1
 
         # Phase 2: converted but unanalyzed .MP4s → analyze queue (recovery)
         for mp4_key in get_converted_keys(config):
