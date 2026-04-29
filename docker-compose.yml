@@ -106,6 +106,9 @@ services:
       # Discord bot token — discord.com/developers → your app → Bot → Token
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
 
+      # Additional bot tokens — one per bot registered in OpenClaw accounts
+      - BOT_GEMINI_FAST_TOKEN=${BOT_GEMINI_FAST_TOKEN}
+
       # Ollama — on comfycowboy_default network (remove if unused)
       - OLLAMA_HOST=http://ollama:11434
       - OLLAMA_API_KEY=dummy-key-bypass
@@ -131,7 +134,8 @@ services:
 
     volumes:
       - ./bot_data:/home/node/.openclaw                  # bind mount — avoids named volume root ownership issue
-      - ./bot:/home/node/.openclaw/workspace             # workspace files tracked in repo, overrides bot_data/workspace
+      - ./bot:/home/node/.openclaw/workspace             # security-cowboy (default agent)
+      - ./bots/geminiFast/workspace:/home/node/.openclaw/workspace-geminiFast  # geminiFast agent
 
 
 volumes:
