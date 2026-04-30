@@ -1,0 +1,19 @@
+networks:
+  comfycowboy_default:
+    external: false
+
+services:
+  mariadb:
+    profiles: [desktop]
+  minio:
+    profiles: [desktop]
+  rabbitmq:
+    profiles: [desktop]
+  bot:
+    profiles: [desktop]
+
+  pipeline:
+    environment:
+      - DATABASE_HOST=192.168.1.114
+      - MINIO_ENDPOINT=http://192.168.1.114:9000
+      - RABBITMQ_HOST=192.168.1.114
