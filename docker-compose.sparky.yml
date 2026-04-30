@@ -13,6 +13,7 @@ services:
     profiles: [desktop]
 
   pipeline:
+    depends_on: {}
     environment:
       - DATABASE_HOST=192.168.1.114
       - MINIO_ENDPOINT=http://192.168.1.114:9000
