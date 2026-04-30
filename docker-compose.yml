@@ -59,10 +59,6 @@ services:
     networks:
       - default
       - comfycowboy_default
-    depends_on:
-      - mariadb
-      - minio
-      - rabbitmq
     env_file:
       - .env
     environment:
