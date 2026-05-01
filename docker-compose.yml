@@ -59,10 +59,6 @@ services:
     networks:
       - default
       - comfycowboy_default
-    depends_on:
-      - mariadb
-      - minio
-      - rabbitmq
     env_file:
       - .env
     environment:
@@ -106,14 +102,11 @@ services:
       # Discord bot token — discord.com/developers → your app → Bot → Token
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
 
-      # Additional bot tokens — one per bot registered in OpenClaw accounts
-      - DISCORD_BOT_TOKEN_GEMINIFAST=${DISCORD_BOT_TOKEN_GEMINIFAST}
-
       # Gemini LLM
       - GEMINI_API_KEY=${GEMINI_API_KEY}
 
-      # MinIO — service name resolves within this compose network
-      - MINIO_ENDPOINT=http://minio:9000
+      # MinIO — defaults to local compose network; override in .env when MinIO is on another host
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-http://minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
       - MINIO_BUCKET=openclaw
@@ -129,9 +122,8 @@ services:
       - PIPELINE_CONTROL_URL=http://pipeline:8765
 
     volumes:
-      - ./bot_data:/home/node/.openclaw                  # bind mount — avoids named volume root ownership issue
-      - ./bot:/home/node/.openclaw/workspace             # security-cowboy (default agent)
-      - ./bots/geminiFast/workspace:/home/node/.openclaw/workspace-geminiFast  # geminiFast agent
+      - ./bot_data:/home/node/.openclaw
+      - ./bot:/home/node/.openclaw/workspace
 
 
 volumes:

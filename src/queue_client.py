@@ -1,3 +1,4 @@
+import os
 import pika
 import json
 import logging
@@ -15,7 +16,7 @@ def get_channel(config: dict):
         mq.get('password', 'guest')
     )
     params = pika.ConnectionParameters(
-        host=mq.get('host', 'localhost'),
+        host=os.getenv('RABBITMQ_HOST') or mq.get('host', 'localhost'),
         port=int(mq.get('port', 5672)),
         credentials=credentials,
         heartbeat=600,
