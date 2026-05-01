@@ -85,9 +85,6 @@ services:
       - comfycowboy_default  # ollama is here — remove if unused
     ports:
       - "18789:18789"
-    depends_on:
-      - mariadb
-      - minio
     env_file:
       - .env
     environment:
