@@ -10,18 +10,23 @@ terminal.  Ctrl+C shuts all three down cleanly.
 To watch pipeline progress in a second terminal while this is running:
     watch -n 5 python3 pipeline_status.py
 """
+import os
 import subprocess
 import sys
 import signal
 import threading
 import time
 
+ANALYZE_WORKERS = int(os.getenv('ANALYZE_WORKERS', '1'))
+
 WORKERS = [
     ('watcher',    ['watcher.py']),
     ('transcode',  ['worker_transcode.py']),
-    ('analyze',    ['worker_analyze.py']),
     ('control',    ['reset_pipeline.py', '--serve']),
 ]
+for i in range(ANALYZE_WORKERS):
+    label = f'analyze-{i+1}' if ANALYZE_WORKERS > 1 else 'analyze'
+    WORKERS.append((label, ['worker_analyze.py']))
 
 # Pad labels so columns line up
 _MAX_LEN = max(len(label) for label, _ in WORKERS)
