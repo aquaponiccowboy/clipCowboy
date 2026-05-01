@@ -1,3 +1,4 @@
+import os
 import pymysql
 import logging
 
@@ -5,7 +6,7 @@ import logging
 def get_connection(config: dict):
     db = config.get('database', {})
     return pymysql.connect(
-        host=db.get('host', 'localhost'),
+        host=os.getenv('DATABASE_HOST') or db.get('host', 'localhost'),
         port=int(db.get('port', 3306)),
         user=db.get('user'),
         password=db.get('password'),

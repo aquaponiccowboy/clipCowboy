@@ -9,7 +9,7 @@ from src.database import get_connection
 def _get_s3_client(config: dict):
     storage_cfg = config.get('storage', {})
     return boto3.client('s3',
-        endpoint_url=storage_cfg.get('endpoint_url'),
+        endpoint_url=os.getenv('MINIO_ENDPOINT') or storage_cfg.get('endpoint_url'),
         aws_access_key_id=storage_cfg.get('access_key'),
         aws_secret_access_key=storage_cfg.get('secret_key'),
         region_name=storage_cfg.get('region_name', 'us-east-1')
