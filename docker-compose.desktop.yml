@@ -1,0 +1,5 @@
+services:
+  minio:
+    profiles: [sparky]
+  pipeline:
+    profiles: [sparky]
