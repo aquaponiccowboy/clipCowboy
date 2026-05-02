@@ -24,10 +24,10 @@ from src.config import load_config
 
 config = {}
 
-
-
-
 MAX_ATTEMPTS = 3
+
+_files_since_summary = 0
+_detections_since_summary = 0
 
 
 def handle(ch, method, properties, body):
@@ -67,11 +67,20 @@ def handle(ch, method, properties, body):
         else:
             n_clips = 0
 
+        global _files_since_summary, _detections_since_summary
+        _files_since_summary += 1
         if n > 0:
+            _detections_since_summary += 1
             clip_note = f", {n_clips} clip{'s' if n_clips != 1 else ''}" if n_clips else ""
             labels = sorted({d['label'] for e in result.get('events', []) for d in e.get('detections', [])})
             label_note = f" [{', '.join(labels)}]" if labels else ""
             discord_notify(f"▸ **[analyze]** {mp4_key} — {n} event{'s' if n != 1 else ''}{clip_note}{label_note}")
+
+        interval = config.get('discord', {}).get('summary_interval', 25)
+        if _files_since_summary >= interval:
+            discord_notify(f"▸ **[analyze]** processed {_files_since_summary} files — {_detections_since_summary} with detections")
+            _files_since_summary = 0
+            _detections_since_summary = 0
 
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
