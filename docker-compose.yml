@@ -99,8 +99,9 @@ services:
       # Discord bot token — discord.com/developers → your app → Bot → Token
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
 
-      # Gemini LLM
+      # Gemini LLM — OpenClaw reads GOOGLE_API_KEY; GEMINI_API_KEY kept for compatibility
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GOOGLE_API_KEY=${GEMINI_API_KEY}
 
       # MinIO — defaults to local compose network; override in .env when MinIO is on another host
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-http://minio:9000}
