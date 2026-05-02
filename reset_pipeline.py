@@ -206,10 +206,12 @@ class _Handler(BaseHTTPRequestHandler):
         minio  = bool(body.get('minio', False))
         queues = bool(body.get('queues', False))
 
+        flags = ' '.join(f'--{f}' for f in ('scores', 'minio', 'queues') if locals()[f])
+        discord_notify(f"🔄 **[reset]** Reset initiated{' (' + flags + ')' if flags else ''}...")
         cleared = do_reset(self.config, scores=scores, minio=minio, queues=queues)
         summary = _format_summary(cleared)
         logging.info(summary)
-        discord_notify(f"🔄 **[reset]** {summary}")
+        discord_notify(f"✅ **[reset]** {summary}")
         self._respond(200, {'cleared': cleared, 'summary': summary})
 
 

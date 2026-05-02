@@ -32,7 +32,8 @@ Examples:
 - "factory reset --queues" → `{"scores": true, "minio": false, "queues": true}`
 - "full reset" → `{"scores": true, "minio": true, "queues": true}`
 
-Execute the HTTP call. Do not show the command. Report the result.
+Before executing, immediately respond with: "Reset initiated — working..."
+Then execute the HTTP call. Do not show the command. Report the result.
 
 ```
 POST {PIPELINE_CONTROL_URL}/reset
