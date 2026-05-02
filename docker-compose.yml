@@ -107,8 +107,8 @@ services:
       - SC_DB_USER=${MYSQL_USER}
       - SC_DB_PASSWORD=${MYSQL_PASSWORD}
 
-      # Pipeline control server
-      - PIPELINE_CONTROL_URL=http://pipeline:8765
+      # Pipeline control server — on Sparky, exposed on LAN port 8765
+      - PIPELINE_CONTROL_URL=http://192.168.1.38:8765
 
     volumes:
       - ./bot_data:/home/node/.openclaw
