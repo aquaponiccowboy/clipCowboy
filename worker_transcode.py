@@ -22,13 +22,13 @@ from src.config import load_config
 
 config = {}
 
-
-
-
 MAX_ATTEMPTS = 3
+
+_files_since_summary = 0
 
 
 def handle(ch, method, properties, body):
+    global _files_since_summary
     msg = json.loads(body)
     ts_key = msg['ts_key']
     camera_id = msg['camera_id']
@@ -47,7 +47,12 @@ def handle(ch, method, properties, body):
         # Publish to analyze queue whether we just converted or it already existed
         publish(ch, ANALYZE_QUEUE, {'mp4_key': mp4_key, 'camera_id': camera_id})
         logging.info(f"Queued for analysis: {mp4_key}")
-        discord_notify(f"▸ **[transcode]** {ts_key} → {mp4_key}")
+
+        _files_since_summary += 1
+        interval = config.get('discord', {}).get('summary_interval', 25)
+        if _files_since_summary >= interval:
+            discord_notify(f"▸ **[transcode]** transcoded {_files_since_summary} files")
+            _files_since_summary = 0
 
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
