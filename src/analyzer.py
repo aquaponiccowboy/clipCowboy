@@ -97,7 +97,9 @@ def detect_objects(mp4_path: str, mask_config: dict, config: dict) -> dict:
 
     vertices_raw = mask_config.get('vertices')
     vertices = np.array(vertices_raw, np.int32) if vertices_raw is not None else None
-    allowed_classes = {c.lower() for c in model_cfg.get('object_sensitivity', {}).get('classes', [])}
+    sensitivity = model_cfg.get('object_sensitivity', {})
+    allowed_classes  = {c.lower() for c in sensitivity.get('classes', [])}
+    excluded_classes = {c.lower() for c in sensitivity.get('exclude', [])}
 
     out = None
     if save_annotated:
@@ -157,8 +159,12 @@ def detect_objects(mp4_path: str, mask_config: dict, config: dict) -> dict:
 
                 xyxy = box.xyxy[0].tolist()
                 if _box_in_polygon(xyxy, vertices):
-                    if not allowed_classes or label.lower() in allowed_classes:
-                        kept_boxes.append((label, box_conf, xyxy))
+                    label_lower = label.lower()
+                    if allowed_classes and label_lower not in allowed_classes:
+                        continue
+                    if label_lower in excluded_classes:
+                        continue
+                    kept_boxes.append((label, box_conf, xyxy))
 
         if kept_boxes:
             total_kept_detections += len(kept_boxes)
