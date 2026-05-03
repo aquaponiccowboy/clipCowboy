@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import sys
+import threading
 import urllib.request
 import urllib.error
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -208,11 +209,26 @@ class _Handler(BaseHTTPRequestHandler):
 
         flags = ' '.join(f'--{f}' for f in ('scores', 'minio', 'queues') if locals()[f])
         discord_notify(f"🔄 **[reset]** Reset initiated{' (' + flags + ')' if flags else ''}...")
-        cleared = do_reset(self.config, scores=scores, minio=minio, queues=queues)
-        summary = _format_summary(cleared)
-        logging.info(summary)
-        discord_notify(f"✅ **[reset]** {summary}")
-        self._respond(200, {'cleared': cleared, 'summary': summary})
+
+        # Return immediately so the bot's HTTP client doesn't time out on long runs.
+        self._respond(202, {'status': 'accepted',
+                            'message': 'Reset running in background; completion will be reported on Discord.'})
+
+        threading.Thread(
+            target=self._run_reset,
+            args=(scores, minio, queues),
+            daemon=True,
+        ).start()
+
+    def _run_reset(self, scores: bool, minio: bool, queues: bool):
+        try:
+            cleared = do_reset(self.config, scores=scores, minio=minio, queues=queues)
+            summary = _format_summary(cleared)
+            logging.info(summary)
+            discord_notify(f"✅ **[reset]** {summary}")
+        except Exception as e:
+            logging.exception("Reset failed")
+            discord_notify(f"❌ **[reset]** failed: {e}")
 
 
 def serve(config):

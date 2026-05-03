@@ -38,11 +38,13 @@ POST {PIPELINE_CONTROL_URL}/reset
 {"scores": true, "minio": false}
 ```
 
-On success, report exactly what was cleared using the response JSON. Example:
-> Reset complete — cleared 142 processed_files, 38 dlq_files, 142 clip_scores. Gallery untouched.
+The endpoint runs the reset asynchronously and returns HTTP 202 immediately.
+The pipeline itself will post a `✅ [reset]` summary to Discord when the work
+finishes. So on a 202 response, simply confirm the request was accepted:
+> Reset accepted — running in background. The pipeline will post the summary here when it finishes.
 
-On failure, report the specific error (connection refused, timeout, HTTP status code). Example:
-> Reset failed — connection refused at http://pipeline:8765. Is the pipeline running?
+On a non-2xx response or connection failure, report the specific error. Example:
+> Reset failed — connection refused at http://192.168.1.38:8765. Is the pipeline running?
 
 Do not show curl commands. Do not say "I will attempt". Just do it and report what happened.
 
