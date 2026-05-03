@@ -128,8 +128,11 @@ def scan_and_publish(config: dict):
                 _mark_in_flight(mp4_key)
                 queued += 1
 
-        # Phase 2: converted but unanalyzed .MP4s → analyze queue (recovery)
-        for mp4_key in get_converted_keys(config):
+        # Phase 2: converted but unanalyzed .MP4s → analyze queue (crash recovery only).
+        # Skip files younger than recovery_min_age so we don't re-queue files that a
+        # worker is actively processing (transcoder just put them here seconds ago).
+        recovery_min_age = config.get('watcher', {}).get('recovery_min_age', 600)
+        for mp4_key in get_converted_keys(config, min_age_seconds=recovery_min_age):
             if is_processed(mp4_key, config):
                 continue
             if is_in_dlq(mp4_key, config):
