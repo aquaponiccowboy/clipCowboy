@@ -207,7 +207,8 @@ class _Handler(BaseHTTPRequestHandler):
         minio  = bool(body.get('minio', False))
         queues = bool(body.get('queues', False))
 
-        flags = ' '.join(f'--{f}' for f in ('scores', 'minio', 'queues') if locals()[f])
+        flag_map = {'scores': scores, 'minio': minio, 'queues': queues}
+        flags = ' '.join(f'--{k}' for k, v in flag_map.items() if v)
         discord_notify(f"🔄 **[reset]** Reset initiated{' (' + flags + ')' if flags else ''}...")
 
         # Return immediately so the bot's HTTP client doesn't time out on long runs.
