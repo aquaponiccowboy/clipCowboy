@@ -23,6 +23,7 @@ minio_data/
 mariadb_data/
 rabbitmq_data/
 bot_data/
+bots/*/data/
 
 # Environment Variables / Secrets
 .env

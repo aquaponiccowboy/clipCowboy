@@ -69,9 +69,9 @@ services:
       - ./config.yml:/app/config.yml:ro
       - pipeline_models:/root/.cache   # YOLO + CLIP model cache across rebuilds
 
-  bot:
+  clipCowboy_bot:
     image: ghcr.io/openclaw/openclaw:latest
-    container_name: footage_bot
+    container_name: clipCowboy_bot
     restart: unless-stopped
     ports:
       - "18789:18789"
@@ -96,7 +96,7 @@ services:
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
       - MINIO_BUCKET=openclaw
 
-      # SecurityCowboy DB
+      # ClipCowboy DB
       - SC_DB_HOST=mariadb
       - SC_DB_PORT=3306
       - SC_DB_NAME=footage_metadata
@@ -107,8 +107,8 @@ services:
       - PIPELINE_CONTROL_URL=http://192.168.1.38:8765
 
     volumes:
-      - ./bot_data:/home/node/.openclaw
-      - ./bot:/home/node/.openclaw/workspace
+      - ./bots/clipCowboy/data:/home/node/.openclaw
+      - ./bots/clipCowboy/workspace:/home/node/.openclaw/workspace
 
 
 volumes:

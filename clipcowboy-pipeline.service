@@ -1,5 +1,5 @@
 [Unit]
-Description=SecurityCowboy Pipeline
+Description=ClipCowboy Pipeline
 Requires=docker.service
 After=docker.service network-online.target
 Wants=network-online.target
@@ -7,7 +7,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/home/zeke/securityCowboy
+WorkingDirectory=/home/zeke/clipCowboy
 ExecStart=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.sparky.yml up -d pipeline
 ExecStop=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.sparky.yml stop pipeline
 User=zeke

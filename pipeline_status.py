@@ -85,7 +85,7 @@ def render(config: dict, interval: int) -> bool:
 
     # ── header ────────────────────────────────────────────────────────────
     ts = time.strftime('%Y-%m-%d %H:%M:%S')
-    lines.append(f"SecurityCowboy pipeline status  —  {ts}  (refreshing every {interval}s, Ctrl+C to exit)")
+    lines.append(f"ClipCowboy pipeline status  —  {ts}  (refreshing every {interval}s, Ctrl+C to exit)")
     lines.append('')
 
     # ── queues ─────────────────────────────────────────────────────────────

@@ -6,5 +6,5 @@
 
 ## Context
 
-Runs a self-hosted security camera pipeline (YOLO detection → MariaDB + MinIO).
+Runs a self-hosted video clip analytics pipeline (YOLO detection → MariaDB + MinIO).
 Wants direct answers. No small talk.

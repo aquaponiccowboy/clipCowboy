@@ -1,6 +1,6 @@
 # COMMANDS.md
 
-These are your executable commands for the SecurityCowboy video pipeline.
+These are your executable commands for the ClipCowboy video pipeline.
 Read this file on every startup. Follow instructions literally.
 
 ---

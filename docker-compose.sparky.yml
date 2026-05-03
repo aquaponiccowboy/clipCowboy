@@ -7,7 +7,7 @@ services:
     profiles: [desktop]
   rabbitmq:
     profiles: [desktop]
-  bot:
+  clipCowboy_bot:
     profiles: [desktop]
 
   pipeline:
