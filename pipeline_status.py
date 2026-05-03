@@ -14,20 +14,15 @@ import sys
 import time
 
 import boto3
-import yaml
 from botocore.exceptions import ClientError
 
+from src.config import load_config
 from src.database import get_connection
 from src.queue_client import ANALYZE_QUEUE, TRANSCODE_QUEUE, get_channel
 
 logging.basicConfig(level=logging.CRITICAL)
 
 _CLEAR = '\033[2J\033[H'   # ANSI: clear screen + move cursor to top
-
-
-def load_config(path: str = 'config.yml') -> dict:
-    with open(path) as f:
-        return yaml.safe_load(f)
 
 
 def queue_depths(config: dict) -> dict:
@@ -88,13 +83,13 @@ def render(config: dict, interval: int) -> bool:
     ok = True
     lines = []
 
-    # ── header ────────────────────────────────────────────────────────────
+    # ── header ─────────────────────────────────────────────────────────────────────
     ts = time.strftime('%Y-%m-%d %H:%M:%S')
-    lines.append(f"SecurityCowboy pipeline status  —  {ts}  (refreshing every {interval}s, Ctrl+C to exit)")
+    lines.append(f"ClipCowboy pipeline status  —  {ts}  (refreshing every {interval}s, Ctrl+C to exit)")
     lines.append('')
 
-    # ── queues ─────────────────────────────────────────────────────────────
-    lines.append('── RabbitMQ queues ────────────────────────────')
+    # ── queues ─────────────────────────────────────────────────────────────────────
+    lines.append('── RabbitMQ queues ──────────────────────────────')
     depths = queue_depths(config)
     if '_error' in depths:
         lines.append(f"  error: {depths['_error']}")
@@ -106,8 +101,8 @@ def render(config: dict, interval: int) -> bool:
 
     lines.append('')
 
-    # ── buckets ────────────────────────────────────────────────────────────
-    lines.append('── MinIO buckets ──────────────────────────────')
+    # ── buckets ─────────────────────────────────────────────────────────────────────
+    lines.append('── MinIO buckets ────────────────────────────────')
     counts = bucket_counts(config)
     for alias, (bucket, n, err) in counts.items():
         if err:
@@ -119,8 +114,8 @@ def render(config: dict, interval: int) -> bool:
 
     lines.append('')
 
-    # ── database ───────────────────────────────────────────────────────────
-    lines.append('── Database ───────────────────────────────────')
+    # ── database ─────────────────────────────────────────────────────────────────────
+    lines.append('── Database ─────────────────────────────────────')
     stats = db_stats(config)
     if '_error' in stats:
         lines.append(f"  error: {stats['_error']}")

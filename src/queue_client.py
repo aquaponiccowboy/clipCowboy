@@ -31,6 +31,19 @@ def get_channel(config: dict):
     return connection, channel
 
 
+def get_queue_depths(config: dict) -> dict:
+    """Return message counts for all pipeline queues."""
+    conn, ch = get_channel(config)
+    try:
+        depths = {}
+        for queue in [TRANSCODE_QUEUE, ANALYZE_QUEUE, TRANSCODE_DLQ, ANALYZE_DLQ]:
+            result = ch.queue_declare(queue=queue, passive=True)
+            depths[queue] = result.method.message_count
+        return depths
+    finally:
+        conn.close()
+
+
 def publish(channel, queue: str, message: dict, headers: dict = None):
     channel.basic_publish(
         exchange='',

@@ -1,6 +1,6 @@
-# SecurityCowboy
+# ClipCowboy
 
-4-camera dashcam pipeline: `.TS` → transcode → YOLO → sort → score. Built for processing ~2 TB of tiny-home build footage.
+Video clip analytics pipeline: `.TS` → transcode → YOLO → sort → score. Built for processing ~2 TB of tiny-home build footage.
 
 **Stack:** RabbitMQ · MinIO · MariaDB · YOLOv8 · OpenClaw · Docker
 

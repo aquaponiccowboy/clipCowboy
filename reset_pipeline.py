@@ -3,23 +3,36 @@
 reset_pipeline.py — wipe processed-file history so test clips re-run.
 Gallery (enrolled recognition data) is always preserved.
 
+By default, commands are sent to the running pipeline's HTTP control server
+(http://localhost:8765). Use --direct to bypass HTTP and connect to the DB
+directly (useful when the pipeline container is stopped).
+
 Usage:
-  python3 reset_pipeline.py                  # dry-run: show row counts
-  python3 reset_pipeline.py --confirm        # wipe processing history + DLQ
-  python3 reset_pipeline.py --confirm --scores   # also clear scores/highlights/scenes
-  python3 reset_pipeline.py --confirm --minio    # also clear converted + processed buckets
-  python3 reset_pipeline.py --serve          # HTTP control server on port 8765
+  python3 reset_pipeline.py                          # dry-run: show row counts
+  python3 reset_pipeline.py --confirm                # wipe processing history + DLQ
+  python3 reset_pipeline.py --confirm --scores       # also clear scores/highlights/scenes
+  python3 reset_pipeline.py --confirm --minio        # also clear MinIO output buckets
+  python3 reset_pipeline.py --confirm --queues       # also purge RabbitMQ queues
+  python3 reset_pipeline.py --url http://host:8765   # target a remote pipeline
+  python3 reset_pipeline.py --direct                 # bypass HTTP, connect to DB directly
+  python3 reset_pipeline.py --serve                  # run HTTP control server on port 8765
 """
 import argparse
 import json
 import logging
 import os
 import sys
-import yaml
+import threading
+import urllib.request
+import urllib.error
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse
 from src.database import ensure_schema
 from src.logging_setup import init_logging, discord_notify
+from src.queue_client import get_queue_depths, TRANSCODE_QUEUE, ANALYZE_QUEUE, TRANSCODE_DLQ, ANALYZE_DLQ
+from src.config import load_config
+
+DEFAULT_URL = os.getenv('PIPELINE_CONTROL_URL', 'http://localhost:8765')
 
 CONTROL_PORT = int(os.getenv('PIPELINE_CONTROL_PORT', '8765'))
 
@@ -32,17 +45,40 @@ SCORE_TABLES = [
     'highlights',
     'scene_labels',
 ]
-MINIO_BUCKETS = ['converted', 'archive', 'annotated', 'quarantine', 'highlights']
+MINIO_BUCKETS = ['converted', 'archive', 'annotated', 'quarantine', 'highlights', 'event_clips']
 
 
-def load_config(path='config.yml'):
-    with open(path) as f:
-        return yaml.safe_load(f)
 
 
 def _get_conn(config):
     from src.database import get_connection
     return get_connection(config)
+
+
+def status_summary(config) -> dict:
+    """Combined queue depths + DB row counts for the /status endpoint."""
+    counts = row_counts(config)
+    try:
+        depths = get_queue_depths(config)
+    except Exception as e:
+        depths = {'error': str(e)}
+    return {'db': counts, 'queues': depths}
+
+
+def format_status_notify(summary: dict) -> str:
+    db = summary.get('db', {})
+    queues = summary.get('queues', {})
+    transcode = queues.get(TRANSCODE_QUEUE, '?')
+    analyze   = queues.get(ANALYZE_QUEUE, '?')
+    dlq       = (queues.get(TRANSCODE_DLQ, 0) or 0) + (queues.get(ANALYZE_DLQ, 0) or 0)
+    processed = db.get('processed_files', '?')
+    dlq_db    = db.get('dlq_files', 0) or 0
+    dlq_total = (dlq or 0) + dlq_db
+    dlq_str   = f" | ⚠ dlq: {dlq_total}" if dlq_total else ""
+    return (
+        f"📊 **[status]** transcode queue: {transcode} | "
+        f"analyze queue: {analyze} | processed: {processed}{dlq_str}"
+    )
 
 
 def row_counts(config) -> dict:
@@ -59,7 +95,23 @@ def row_counts(config) -> dict:
     return counts
 
 
-def do_reset(config, scores=False, minio=False) -> dict:
+def _purge_queues(config) -> dict:
+    from src.queue_client import get_channel
+    conn, ch = get_channel(config)
+    result = {}
+    try:
+        for queue in [TRANSCODE_QUEUE, ANALYZE_QUEUE, TRANSCODE_DLQ, ANALYZE_DLQ]:
+            try:
+                r = ch.queue_purge(queue)
+                result[queue] = r.method.message_count
+            except Exception as e:
+                result[queue] = f'error: {e}'
+    finally:
+        conn.close()
+    return result
+
+
+def do_reset(config, scores=False, minio=False, queues=False) -> dict:
     conn = _get_conn(config)
     cur = conn.cursor()
     cleared = {}
@@ -78,6 +130,9 @@ def do_reset(config, scores=False, minio=False) -> dict:
 
     if minio:
         cleared['minio'] = _clear_minio(config)
+
+    if queues:
+        cleared['queues'] = _purge_queues(config)
 
     return cleared
 
@@ -108,9 +163,12 @@ def _clear_minio(config) -> dict:
 def _format_summary(cleared: dict) -> str:
     lines = ['Pipeline reset complete:']
     for k, v in cleared.items():
-        if isinstance(v, dict):
+        if k == 'minio' and isinstance(v, dict):
             for bk, bv in v.items():
                 lines.append(f'  minio/{bk}: {bv} objects deleted')
+        elif k == 'queues' and isinstance(v, dict):
+            for qk, qv in v.items():
+                lines.append(f'  queue/{qk}: {qv} messages purged')
         else:
             lines.append(f'  {k}: {v} rows cleared')
     return '\n'.join(lines)
@@ -132,7 +190,8 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if urlparse(self.path).path == '/status':
-            self._respond(200, {'counts': row_counts(self.config)})
+            summary = status_summary(self.config)
+            self._respond(200, {**summary, 'summary': format_status_notify(summary)})
         else:
             self._respond(404, {'error': 'not found'})
 
@@ -146,12 +205,31 @@ class _Handler(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(length) or b'{}')
         scores = bool(body.get('scores', False))
         minio  = bool(body.get('minio', False))
+        queues = bool(body.get('queues', False))
 
-        cleared = do_reset(self.config, scores=scores, minio=minio)
-        summary = _format_summary(cleared)
-        logging.info(summary)
-        discord_notify(f"🔄 **[reset]** {summary}")
-        self._respond(200, {'cleared': cleared, 'summary': summary})
+        flag_map = {'scores': scores, 'minio': minio, 'queues': queues}
+        flags = ' '.join(f'--{k}' for k, v in flag_map.items() if v)
+        discord_notify(f"🔄 **[reset]** Reset initiated{' (' + flags + ')' if flags else ''}...")
+
+        # Return immediately so the bot's HTTP client doesn't time out on long runs.
+        self._respond(202, {'status': 'accepted',
+                            'message': 'Reset running in background; completion will be reported on Discord.'})
+
+        threading.Thread(
+            target=self._run_reset,
+            args=(scores, minio, queues),
+            daemon=True,
+        ).start()
+
+    def _run_reset(self, scores: bool, minio: bool, queues: bool):
+        try:
+            cleared = do_reset(self.config, scores=scores, minio=minio, queues=queues)
+            summary = _format_summary(cleared)
+            logging.info(summary)
+            discord_notify(f"✅ **[reset]** {summary}")
+        except Exception as e:
+            logging.exception("Reset failed")
+            discord_notify(f"❌ **[reset]** failed: {e}")
 
 
 def serve(config):
@@ -161,6 +239,24 @@ def serve(config):
     server.serve_forever()
 
 
+def _http_status(url: str) -> None:
+    req = urllib.request.Request(f'{url}/status')
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        data = json.loads(resp.read())
+    print('\n' + data.get('summary', json.dumps(data.get('db', {}), indent=2)))
+
+
+def _http_reset(url: str, scores: bool, minio: bool, queues: bool) -> None:
+    body = json.dumps({'scores': scores, 'minio': minio, 'queues': queues}).encode()
+    req = urllib.request.Request(
+        f'{url}/reset', data=body,
+        headers={'Content-Type': 'application/json'}, method='POST'
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        data = json.loads(resp.read())
+    print('\n' + data.get('summary', json.dumps(data, indent=2)))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--confirm', action='store_true',
@@ -168,35 +264,57 @@ def main():
     parser.add_argument('--scores', action='store_true',
                         help='Also clear clip_scores, highlights, scene_labels')
     parser.add_argument('--minio', action='store_true',
-                        help='Also delete objects in converted + processed buckets')
+                        help='Also delete objects in MinIO output buckets')
+    parser.add_argument('--queues', action='store_true',
+                        help='Also purge RabbitMQ transcode/analyze queues')
+    parser.add_argument('--url', default=DEFAULT_URL,
+                        help=f'Pipeline control server URL (default: {DEFAULT_URL})')
+    parser.add_argument('--direct', action='store_true',
+                        help='Bypass HTTP and connect to DB directly (pipeline stopped)')
     parser.add_argument('--serve', action='store_true',
-                        help='Run HTTP control server instead of one-shot reset')
+                        help='Run HTTP control server on port 8765')
     args = parser.parse_args()
 
-    config = load_config()
-    init_logging('reset')
-    ensure_schema(config)
-
     if args.serve:
+        config = load_config()
+        init_logging('reset')
+        ensure_schema(config)
         serve(config)
         return
 
-    counts = row_counts(config)
-    print('\nCurrent row counts (gallery preserved):')
-    for t, n in counts.items():
-        marker = '  [protected]' if t == 'gallery' else ''
-        print(f'  {t}: {n}{marker}')
+    if args.direct:
+        config = load_config()
+        init_logging('reset')
+        ensure_schema(config)
+        counts = row_counts(config)
+        print('\nCurrent row counts (gallery preserved):')
+        for t, n in counts.items():
+            marker = '  [protected]' if t == 'gallery' else ''
+            print(f'  {t}: {n}{marker}')
+        if not args.confirm:
+            print('\nDry-run. Pass --confirm to execute.')
+            return
+        cleared = do_reset(config, scores=args.scores, minio=args.minio, queues=args.queues)
+        print('\n' + _format_summary(cleared))
+        return
+
+    # Default: talk to the running pipeline's control server via HTTP
+    try:
+        _http_status(args.url)
+    except urllib.error.URLError as e:
+        print(f'\nCannot reach pipeline at {args.url}: {e.reason}')
+        print('Is the pipeline running? Try --direct to connect to the DB directly.')
+        sys.exit(1)
 
     if not args.confirm:
         print('\nDry-run. Pass --confirm to execute.')
         return
 
-    tables = PIPELINE_TABLES + (SCORE_TABLES if args.scores else [])
-    print(f'\nClearing: {", ".join(tables)}' +
-          (' + MinIO buckets' if args.minio else ''))
-
-    cleared = do_reset(config, scores=args.scores, minio=args.minio)
-    print('\n' + _format_summary(cleared))
+    try:
+        _http_reset(args.url, scores=args.scores, minio=args.minio, queues=args.queues)
+    except urllib.error.URLError as e:
+        print(f'\nReset failed: {e.reason}')
+        sys.exit(1)
 
 
 if __name__ == '__main__':
