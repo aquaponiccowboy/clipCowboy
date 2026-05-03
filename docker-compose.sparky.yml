@@ -16,8 +16,9 @@ services:
       args:
         REQUIREMENTS: requirements.sparky.txt
     environment:
-      - DATABASE_HOST=192.168.1.114
-      - RABBITMQ_HOST=192.168.1.114
+      - DATABASE_HOST=192.168.1.153
+      - RABBITMQ_HOST=192.168.1.153
+      - MINIO_ENDPOINT=http://192.168.1.38:9000
       - ANALYZE_WORKERS=5
 
   ollama:
