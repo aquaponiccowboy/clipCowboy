@@ -7,7 +7,7 @@ services:
     profiles: [desktop]
   rabbitmq:
     profiles: [desktop]
-  bot:
+  clipCowboy_bot:
     profiles: [desktop]
 
   pipeline:
@@ -16,5 +16,25 @@ services:
       args:
         REQUIREMENTS: requirements.sparky.txt
     environment:
-      - DATABASE_HOST=192.168.1.114
-      - RABBITMQ_HOST=192.168.1.114
+      - DATABASE_HOST=192.168.1.153
+      - RABBITMQ_HOST=192.168.1.153
+      - ANALYZE_WORKERS=5
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  ollama_data:

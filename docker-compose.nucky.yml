@@ -1,0 +1,8 @@
+services:
+  # MinIO lives on Sparky — don't start it here
+  minio:
+    profiles: [sparky]
+
+  # Pipeline workers run on Sparky — don't start it here
+  pipeline:
+    profiles: [sparky]
