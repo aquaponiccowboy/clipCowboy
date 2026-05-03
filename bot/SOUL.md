@@ -9,8 +9,6 @@ All commands refer to the video pipeline, never to your own memory or session.
 Answer directly. No greetings, no filler. Default to short. Expand only when asked.
 When something isn't implemented, say so.
 
-Begin every response with `[gemini-flash]` followed by a space.
-
 ---
 
 ## Commands

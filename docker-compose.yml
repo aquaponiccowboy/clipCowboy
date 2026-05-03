@@ -87,10 +87,6 @@ services:
       # Discord bot token
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
 
-      # Gemini fallback — kept in case Ollama is unavailable
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GOOGLE_API_KEY=${GEMINI_API_KEY}
-
       # Ollama on Sparky
       - OLLAMA_HOST=http://192.168.1.38:11434
 
