@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""
-Transcoder Worker: converts .TS files to MP4 and queues them for analysis.
-
-Consumes: footage.transcode
-Produces: footage.analyze
-
-Run with: python3 worker_transcode.py
-Scale up by running multiple instances.
-"""
 import yaml
 import json
 import logging
@@ -18,19 +9,15 @@ from src.persistence import record_dlq, ensure_buckets
 from src.database import ensure_schema
 from src.queue_client import get_channel, publish, TRANSCODE_QUEUE, ANALYZE_QUEUE, TRANSCODE_DLQ
 from src.logging_setup import init_logging, discord_notify
+from src.config import load_config
 
 config = {}
-
-
-def load_config(path='config.yml'):
-    with open(path) as f:
-        return yaml.safe_load(f)
-
-
 MAX_ATTEMPTS = 3
+_files_since_summary = 0
 
 
 def handle(ch, method, properties, body):
+    global _files_since_summary
     msg = json.loads(body)
     ts_key = msg['ts_key']
     camera_id = msg['camera_id']
@@ -41,30 +28,27 @@ def handle(ch, method, properties, body):
 
     try:
         local_mp4 = transcode(ts_key, config)
-
-        # Clean up the local file — analyzer worker downloads fresh from MinIO
         if local_mp4 and os.path.exists(local_mp4):
             os.remove(local_mp4)
 
-        # Publish to analyze queue whether we just converted or it already existed
         publish(ch, ANALYZE_QUEUE, {'mp4_key': mp4_key, 'camera_id': camera_id})
-        logging.info(f"Queued for analysis: {mp4_key}")
-        discord_notify(f"▸ **[transcode]** {ts_key} → {mp4_key}")
+
+        _files_since_summary += 1
+        interval = config.get('discord', {}).get('summary_interval', 25)
+        if _files_since_summary >= interval:
+            discord_notify(f"▸ **[transcode]** transcoded {_files_since_summary} files")
+            _files_since_summary = 0
 
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
     except Exception as e:
         logging.error(f"Transcode failed for {ts_key} (attempt {attempt}/{MAX_ATTEMPTS}): {e}")
-        # Ack the original so it leaves the work queue, then decide retry vs DLQ.
-        # We can't modify headers via basic_nack(requeue=True), so we republish manually.
         ch.basic_ack(delivery_tag=method.delivery_tag)
         if attempt < MAX_ATTEMPTS:
             publish(ch, TRANSCODE_QUEUE, msg, headers={'x-retry-count': attempt})
-            logging.warning(f"Requeued {ts_key} for retry (attempt {attempt + 1}/{MAX_ATTEMPTS}).")
         else:
             record_dlq(ts_key, TRANSCODE_DLQ, str(e), config)
             publish(ch, TRANSCODE_DLQ, {**msg, 'error': str(e)})
-            logging.error(f"Sent to DLQ after {MAX_ATTEMPTS} failed attempts: {ts_key}")
 
 
 if __name__ == '__main__':
@@ -79,5 +63,4 @@ if __name__ == '__main__':
     try:
         ch.start_consuming()
     except KeyboardInterrupt:
-        logging.info("Transcoder worker shutting down.")
         conn.close()
