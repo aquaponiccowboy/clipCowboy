@@ -42,8 +42,18 @@ class DiscordHandler(logging.Handler):
 
     def _drain_loop(self) -> None:
         while True:
-            time.sleep(_DRAIN_INTERVAL)
-            self._flush()
+            try:
+                time.sleep(_DRAIN_INTERVAL)
+                self._flush()
+            except Exception as e:
+                # Never let the drain thread die — log and keep going.
+                try:
+                    logging.getLogger(__name__).error(
+                        f"DiscordHandler drain loop error: {e!r}", exc_info=True
+                    )
+                except Exception:
+                    pass
+                time.sleep(_DRAIN_INTERVAL)
 
     def _flush(self) -> None:
         if _requests is None:
@@ -64,5 +74,11 @@ class DiscordHandler(logging.Handler):
                 time.sleep(retry_after)
                 for line in lines:
                     self._q.put_nowait(line)
-        except Exception:
-            pass
+            elif r.status_code >= 400:
+                logging.getLogger(__name__).warning(
+                    f"DiscordHandler POST {r.status_code}: {r.text[:200]}"
+                )
+        except Exception as e:
+            logging.getLogger(__name__).warning(
+                f"DiscordHandler POST failed: {e!r}"
+            )
