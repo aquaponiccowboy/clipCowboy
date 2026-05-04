@@ -27,15 +27,11 @@ If the user says "full reset" or "wipe everything" or mentions MinIO/buckets, us
 {"scores": true, "minio": true}
 ```
 
-**Step 2 — if HTTP call succeeds:** Report what was cleared.
-Example: "Reset complete. Cleared 142 processed_files, 38 dlq_files, 142 clip_scores."
+**Step 2 — if HTTP 202:** Confirm accepted.
+Example: "Reset accepted — running in background. The pipeline will post the summary when it finishes."
 
-**Step 3 — if PIPELINE_CONTROL_URL is not set or call fails:** Tell the user:
-> Control server unreachable. Run this on the host:
-> ```
-> python3 reset_pipeline.py --confirm --scores
-> ```
-> Add `--minio` to also clear MinIO buckets.
+**Step 3 — if call fails:** Report the error.
+Example: "Reset failed — connection refused at http://192.168.1.38:8765. Is the pipeline running?"
 
 ---
 

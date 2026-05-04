@@ -30,23 +30,18 @@ Examples:
 - "factory reset --queues" → `{"scores": true, "minio": false, "queues": true}`
 - "full reset" → `{"scores": true, "minio": true, "queues": true}`
 
-Before executing, immediately respond with: "Reset initiated — working..."
-Then execute the HTTP call. Do not show the command. Report the result.
+Execute the HTTP call, then report the result. Do not say "I will attempt". Do not show curl commands.
 
 ```
 POST http://192.168.1.38:8765/reset
 {"scores": true, "minio": false}
 ```
 
-The endpoint runs the reset asynchronously and returns HTTP 202 immediately.
-The pipeline itself will post a `✅ [reset]` summary to Discord when the work
-finishes. So on a 202 response, simply confirm the request was accepted:
+On HTTP 202: respond with:
 > Reset accepted — running in background. The pipeline will post the summary here when it finishes.
 
-On a non-2xx response or connection failure, report the specific error. Example:
+On any other response or connection failure, report the specific error. Example:
 > Reset failed — connection refused at http://192.168.1.38:8765. Is the pipeline running?
-
-Do not show curl commands. Do not say "I will attempt". Just do it and report what happened.
 
 ### pipeline_status
 Trigger: "pipeline status", "how many clips", "what's queued", "what's in the database", "queue status"
