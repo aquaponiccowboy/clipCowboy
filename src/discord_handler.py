@@ -1,12 +1,28 @@
 import logging
 import queue
+import sys
 import threading
 import time
+import traceback
 
 try:
     import requests as _requests
 except ImportError:
     _requests = None
+
+
+def _diag(msg: str) -> None:
+    """Write a diagnostic line to stderr.
+
+    Bypasses the logging system on purpose — this handler is attached to the
+    root logger, so logging from inside it would feed back into our own queue
+    and self-DoS Discord on every transient error.
+    """
+    try:
+        sys.stderr.write(f"[discord_handler] {msg}\n")
+        sys.stderr.flush()
+    except Exception:
+        pass
 
 _DRAIN_INTERVAL = 1.5   # seconds between Discord POSTs
 _MAX_BATCH = 15          # lines per message
@@ -46,13 +62,8 @@ class DiscordHandler(logging.Handler):
                 time.sleep(_DRAIN_INTERVAL)
                 self._flush()
             except Exception as e:
-                # Never let the drain thread die — log and keep going.
-                try:
-                    logging.getLogger(__name__).error(
-                        f"DiscordHandler drain loop error: {e!r}", exc_info=True
-                    )
-                except Exception:
-                    pass
+                # Never let the drain thread die.
+                _diag(f"drain loop error: {e!r}\n{traceback.format_exc()}")
                 time.sleep(_DRAIN_INTERVAL)
 
     def _flush(self) -> None:
@@ -75,10 +86,6 @@ class DiscordHandler(logging.Handler):
                 for line in lines:
                     self._q.put_nowait(line)
             elif r.status_code >= 400:
-                logging.getLogger(__name__).warning(
-                    f"DiscordHandler POST {r.status_code}: {r.text[:200]}"
-                )
+                _diag(f"POST {r.status_code}: {r.text[:200]}")
         except Exception as e:
-            logging.getLogger(__name__).warning(
-                f"DiscordHandler POST failed: {e!r}"
-            )
+            _diag(f"POST failed: {e!r}")
