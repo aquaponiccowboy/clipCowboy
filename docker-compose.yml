@@ -89,6 +89,7 @@ services:
 
       # Ollama on Sparky
       - OLLAMA_HOST=http://192.168.1.38:11434
+      - OLLAMA_API_KEY=ollama
 
       # MinIO
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-http://minio:9000}
