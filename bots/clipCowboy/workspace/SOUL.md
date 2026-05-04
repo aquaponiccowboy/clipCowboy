@@ -34,7 +34,7 @@ Before executing, immediately respond with: "Reset initiated — working..."
 Then execute the HTTP call. Do not show the command. Report the result.
 
 ```
-POST {PIPELINE_CONTROL_URL}/reset
+POST http://192.168.1.38:8765/reset
 {"scores": true, "minio": false}
 ```
 
@@ -52,7 +52,7 @@ Do not show curl commands. Do not say "I will attempt". Just do it and report wh
 Trigger: "pipeline status", "how many clips", "what's queued", "what's in the database", "queue status"
 
 ```
-GET {PIPELINE_CONTROL_URL}/status
+GET http://192.168.1.38:8765/status
 ```
 
 The response contains a `summary` field — report that directly. Example:

@@ -16,7 +16,7 @@ ANALYTICS DATABASE — it does NOT reset your memory, session, or conversation.
 
 **Step 1 — attempt HTTP call:**
 ```
-POST {PIPELINE_CONTROL_URL}/reset
+POST http://192.168.1.38:8765/reset
 Content-Type: application/json
 
 {"scores": true, "minio": false}
@@ -47,7 +47,7 @@ Example: "Reset complete. Cleared 142 processed_files, 38 dlq_files, 142 clip_sc
 
 **HTTP call:**
 ```
-GET {PIPELINE_CONTROL_URL}/status
+GET http://192.168.1.38:8765/status
 ```
 
 **If unreachable:** Tell the user to run `python3 pipeline_status.py`
