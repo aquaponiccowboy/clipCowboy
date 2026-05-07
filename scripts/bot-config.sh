@@ -40,20 +40,28 @@ if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
 fi
 
 set_json() {
+  # OpenClaw 2026.5.7+ refuses object writes that drop existing fields unless
+  # the caller passes --merge or --replace. Trailing args after value are
+  # forwarded so each caller can pick the right mode for its payload.
   local path="$1" value="$2"
-  docker exec "$CONTAINER" openclaw config set "$path" "$value" --strict-json
+  shift 2
+  docker exec "$CONTAINER" openclaw config set "$path" "$value" --strict-json "$@"
 }
 
-# Ollama provider — top-level authoritative entry. Per-agent models.json
-# baseUrl is preserved by merge mode; apiKey is normalized from this entry.
+# Ollama provider — merge so OpenClaw's auto-managed fields (e.g.
+# timeoutSeconds added on first boot) survive the rewrite. Our payload
+# defines baseUrl/apiKey/models authoritatively; everything else stays.
 set_json models.providers.ollama \
-  "$(printf '{"baseUrl":"%s","apiKey":"%s","models":[]}' "$OLLAMA_HOST" "$OLLAMA_API_KEY")"
+  "$(printf '{"baseUrl":"%s","apiKey":"%s","models":[]}' "$OLLAMA_HOST" "$OLLAMA_API_KEY")" \
+  --merge
 
-# Discord scope — only this guild + channel. groupPolicy=allowlist means
-# any other guild the bot finds itself in is ignored.
+# Discord scope — replace so only this guild + channel are present.
+# groupPolicy=allowlist means any other guild the bot finds itself in is
+# ignored.
 set_json channels.discord.guilds \
   "$(printf '{"%s":{"slug":"main","channels":{"%s":{"enabled":true,"requireMention":false}}}}' \
-    "$DISCORD_GUILD_ID" "$DISCORD_CHANNEL_ID")"
+    "$DISCORD_GUILD_ID" "$DISCORD_CHANNEL_ID")" \
+  --replace
 
 docker exec "$CONTAINER" openclaw config set channels.discord.groupPolicy allowlist
 
