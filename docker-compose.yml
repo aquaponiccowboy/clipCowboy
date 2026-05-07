@@ -74,7 +74,13 @@ services:
   # tools.web.fetch.useTrustedEnvProxy: true lets the bot punt resolution to a
   # proxy you control. This is that proxy. See proxy/tinyproxy.conf.
   bot_proxy:
-    build: ./proxy
+    build:
+      context: ./proxy
+      # Build on the host network so apt can resolve deb.debian.org via the
+      # host's resolver (AdGuard). Default bridge DNS doesn't reach AdGuard
+      # on this host, which makes the build hang in the Ign:/Err: loop.
+      # Runtime networking is unaffected — only the build step uses host net.
+      network: host
     container_name: bot_proxy
     restart: unless-stopped
 
