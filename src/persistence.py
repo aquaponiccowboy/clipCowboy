@@ -141,6 +141,9 @@ def commit_result(file_key: str, config: dict, result: dict, camera_id: str = No
     # Phase 2: move the file in S3.
     # On failure, roll back the DB record so the file in `converted` stays
     # visible and the worker can retry without is_processed() blocking it.
+    # Exception: if the source is already gone (NoSuchKey), another worker
+    # raced ahead and finished — both runs produce the same DB row from the
+    # same model on the same input, so we ack rather than rolling back.
     try:
         if has_objects:
             logging.info(f"ACTION DETECTED: Archiving {file_key}...")
@@ -172,6 +175,13 @@ def commit_result(file_key: str, config: dict, result: dict, camera_id: str = No
         s3.delete_object(Bucket=converted_bucket, Key=file_key)
 
     except ClientError as e:
+        code = e.response.get('Error', {}).get('Code')
+        if code in ('NoSuchKey', '404'):
+            logging.info(
+                f"Source already moved for {file_key} — duplicate worker race, "
+                f"DB row from peer is authoritative. Skipping S3 ops."
+            )
+            return
         logging.error(f"Storage operation failed for {file_key}: {e}")
         _delete_db_record(file_key, config)
         raise
