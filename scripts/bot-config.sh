@@ -11,6 +11,17 @@
 
 set -euo pipefail
 
+# Load values from .env if it's next to docker-compose.yml — otherwise the
+# script ran without the env exported and would fail later on missing
+# DISCORD_GUILD_ID / DISCORD_CHANNEL_ID even when they're set in .env.
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+if [[ -f "$REPO_ROOT/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$REPO_ROOT/.env"
+  set +a
+fi
+
 CONTAINER="${CONTAINER:-clipCowboy_bot}"
 
 : "${OLLAMA_HOST:=http://ollama.truck:11434}"
