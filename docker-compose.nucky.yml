@@ -6,3 +6,10 @@ services:
   # Pipeline workers run on Sparky — don't start it here
   pipeline:
     profiles: [sparky]
+
+  # OpenClaw bot runs here on nucky. Env vars come from .env (gitignored);
+  # the :- defaults let the bot start even with an empty .env.
+  clipCowboy_bot:
+    environment:
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama.truck:11434}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY:-ollama}
