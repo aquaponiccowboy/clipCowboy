@@ -70,7 +70,7 @@ services:
       - pipeline_models:/root/.cache   # YOLO + CLIP model cache across rebuilds
 
   clipCowboy_bot:
-    image: ghcr.io/openclaw/openclaw:latest
+    image: ghcr.io/openclaw/openclaw:2026.5.2
     container_name: clipCowboy_bot
     restart: unless-stopped
     ports:
