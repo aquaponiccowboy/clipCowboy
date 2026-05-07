@@ -69,10 +69,21 @@ services:
       - ./config.yml:/app/config.yml:ro
       - pipeline_models:/root/.cache   # YOLO + CLIP model cache across rebuilds
 
+  # Forward proxy for the bot. OpenClaw 2026.5.x web_fetch refuses RFC 1918
+  # destinations by resolved IP and exposes no operator opt-out for that, but
+  # tools.web.fetch.useTrustedEnvProxy: true lets the bot punt resolution to a
+  # proxy you control. This is that proxy. See proxy/tinyproxy.conf.
+  bot_proxy:
+    build: ./proxy
+    container_name: bot_proxy
+    restart: unless-stopped
+
   clipCowboy_bot:
-    image: ghcr.io/openclaw/openclaw:2026.5.2
+    image: ghcr.io/openclaw/openclaw:2026.5.7
     container_name: clipCowboy_bot
     restart: unless-stopped
+    depends_on:
+      - bot_proxy
     ports:
       - "18789:18789"
     env_file:
@@ -100,8 +111,13 @@ services:
       - SC_DB_USER=${MYSQL_USER}
       - SC_DB_PASSWORD=${MYSQL_PASSWORD}
 
-      # Pipeline control server — on Sparky, exposed on LAN port 8765
+      # Pipeline control server — on Sparky, exposed on LAN port 8765.
+      # Reached via bot_proxy because web_fetch's SSRF guard blocks 192.168.x.x
+      # for direct access. See proxy/tinyproxy.conf.
       - PIPELINE_CONTROL_URL=http://192.168.1.38:8765
+      - HTTP_PROXY=http://bot_proxy:8888
+      - HTTPS_PROXY=http://bot_proxy:8888
+      - NO_PROXY=localhost,127.0.0.1,mariadb,minio,rabbitmq
 
     volumes:
       - ./bots/clipCowboy/data:/home/node/.openclaw
