@@ -46,6 +46,13 @@ set_json channels.discord.guilds \
 
 docker exec "$CONTAINER" openclaw config set channels.discord.groupPolicy allowlist
 
+# web_fetch — turn it on and route through the bot_proxy sidecar so the SSRF
+# guard's RFC 1918 block doesn't stop the bot from reaching the pipeline
+# control server at http://192.168.1.38:8765. HTTP_PROXY on clipCowboy_bot
+# points at bot_proxy:8888 (see docker-compose.yml + proxy/tinyproxy.conf).
+set_json tools.web.fetch.enabled true
+set_json tools.web.fetch.useTrustedEnvProxy true
+
 echo
 echo "Validating..."
 docker exec "$CONTAINER" openclaw config validate

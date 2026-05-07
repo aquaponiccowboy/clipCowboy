@@ -9,6 +9,8 @@ services:
     profiles: [desktop]
   clipCowboy_bot:
     profiles: [desktop]
+  bot_proxy:
+    profiles: [desktop]
 
   pipeline:
     build:
