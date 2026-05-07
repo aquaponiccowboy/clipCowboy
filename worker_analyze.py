@@ -33,7 +33,6 @@ _detections_since_summary = 0
 def handle(ch, method, properties, body):
     msg = json.loads(body)
     mp4_key = msg['mp4_key']
-    camera_id = msg['camera_id']
 
     # Guard against duplicate messages
     if is_processed(mp4_key, config):
@@ -49,6 +48,10 @@ def handle(ch, method, properties, body):
         logging.warning(f"No camera context for {mp4_key} — acking and skipping.")
         ch.basic_ack(delivery_tag=method.delivery_tag)
         return
+
+    # Re-derive camera_id from the routed context rather than trusting the queue
+    # payload — older messages may carry the legacy 'default' sentinel.
+    camera_id = context['camera_id']
 
     local_mp4 = None
     try:

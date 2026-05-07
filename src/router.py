@@ -10,23 +10,28 @@ def get_camera_context(filename: str, config: dict) -> dict:
     """
     try:
         base_name = filename.upper().rsplit('.', 1)[0]
-        camera_id = base_name[-1]
+        last_char = base_name[-1]
         filters = config.get('filters', {})
 
-        if camera_id in filters:
-            filter_key = camera_id
-            logging.info(f"Matched {filename} to filter '{camera_id}'")
+        # Only treat a single-character filter key as a real security-cam ID.
+        # 'default' (and any other multi-char key) is a fallback bucket, not a camera.
+        if last_char in filters and len(last_char) == 1 and last_char != 'DEFAULT':
+            filter_key = last_char
+            camera_id = last_char
+            logging.info(f"Matched {filename} to filter '{last_char}'")
         elif 'default' in filters:
             filter_key = 'default'
-            logging.info(f"No filter for '{camera_id}' in {filename} — using default")
+            camera_id = None
+            logging.info(f"No filter for '{last_char}' in {filename} — using default")
         else:
-            logging.warning(f"No filter for '{camera_id}' and no default defined — skipping {filename}")
+            logging.warning(f"No filter for '{last_char}' and no default defined — skipping {filename}")
             return None
 
         vertices = filters[filter_key].get('spatial_mask', {}).get('vertices')
 
         return {
             'id': filter_key,
+            'camera_id': camera_id,  # security-cam letter, or None for non-camera footage
             'file_key': filename,
             'mask_config': {'vertices': vertices},  # None = full frame
         }

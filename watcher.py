@@ -111,7 +111,7 @@ def scan_and_publish(config: dict):
             if not context:
                 continue
 
-            publish(ch, TRANSCODE_QUEUE, {'ts_key': ts_key, 'camera_id': context['id']})
+            publish(ch, TRANSCODE_QUEUE, {'ts_key': ts_key, 'camera_id': context['camera_id']})
             _mark_in_flight(ts_key)
             logging.info(f"Queued for transcode: {ts_key}")
             queued += 1
@@ -146,7 +146,7 @@ def scan_and_publish(config: dict):
             if not context:
                 continue
 
-            publish(ch, ANALYZE_QUEUE, {'mp4_key': mp4_key, 'camera_id': context['id']})
+            publish(ch, ANALYZE_QUEUE, {'mp4_key': mp4_key, 'camera_id': context['camera_id']})
             _mark_in_flight(mp4_key)
             logging.info(f"Queued for analysis (recovery): {mp4_key}")
             queued += 1
