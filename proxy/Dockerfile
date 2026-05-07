@@ -1,6 +1,8 @@
-FROM alpine:3.21
+FROM debian:bookworm-slim
 
-RUN apk add --no-cache tinyproxy
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tinyproxy \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY tinyproxy.conf /etc/tinyproxy/tinyproxy.conf
 
