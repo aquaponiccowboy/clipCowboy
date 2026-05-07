@@ -87,9 +87,9 @@ services:
       # Discord bot token
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
 
-      # Ollama on Sparky
-      - OLLAMA_HOST=http://192.168.1.38:11434
-      - OLLAMA_API_KEY=ollama
+      # Ollama (local LLM) — values come from .env; defaults are safe fallbacks.
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama.truck:11434}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY:-ollama}
 
       # MinIO
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-http://minio:9000}
