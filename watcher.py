@@ -116,7 +116,11 @@ def scan_and_publish(config: dict):
             logging.info(f"Queued for transcode: {ts_key}")
             queued += 1
 
-        # Phase 1b: MP4s in input bucket → move to converted, Phase 2 will queue for analysis
+        # Phase 1b: MP4s in input bucket → move to converted and queue for analysis
+        # immediately. Without the direct publish, content footage would sit in
+        # `converted` for `recovery_min_age` seconds (default 600) before Phase 2
+        # picked it up, since Phase 2 also skips in-flight keys until inflight_ttl
+        # expires. Mirror the transcode worker's post-remux behaviour instead.
         for mp4_key in get_input_mp4_keys(config):
             if is_processed(mp4_key, config):
                 continue
@@ -124,8 +128,15 @@ def scan_and_publish(config: dict):
                 continue
             if _is_in_flight(mp4_key, ttl):
                 continue
+
+            context = get_camera_context(mp4_key, config)
+            if not context:
+                continue
+
             if _move_to_converted(mp4_key, config):
+                publish(ch, ANALYZE_QUEUE, {'mp4_key': mp4_key, 'camera_id': context['camera_id']})
                 _mark_in_flight(mp4_key)
+                logging.info(f"Queued for analysis: {mp4_key}")
                 queued += 1
 
         # Phase 2: converted but unanalyzed .MP4s → analyze queue (crash recovery only).
