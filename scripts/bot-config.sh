@@ -39,6 +39,12 @@ if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
   exit 1
 fi
 
+# OpenClaw 2026.5.x split discord out of the stock plugin bundle. Install the
+# external plugin idempotently — `plugins install` is a no-op if the package
+# is already linked under /home/node/.openclaw/npm/node_modules/@openclaw/.
+echo "Installing @openclaw/discord (idempotent)..."
+docker exec "$CONTAINER" openclaw plugins install @openclaw/discord >/dev/null 2>&1 || true
+
 set_json() {
   # OpenClaw 2026.5.7+ refuses object writes that drop existing fields unless
   # the caller passes --merge or --replace. Trailing args after value are
@@ -47,6 +53,10 @@ set_json() {
   shift 2
   docker exec "$CONTAINER" openclaw config set "$path" "$value" --strict-json "$@"
 }
+
+# Discord plugin — explicit enable. In 2026.5.7 the default-enable rule
+# flipped, so an absent entry means the plugin doesn't load.
+set_json plugins.entries.discord.enabled true
 
 # Ollama provider — merge so OpenClaw's auto-managed fields (e.g.
 # timeoutSeconds added on first boot) survive the rewrite. Our payload
