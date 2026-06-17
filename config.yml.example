@@ -1,0 +1,147 @@
+# Copy this file to config.yml and fill in your values.
+# config.yml is gitignored — never commit the real config.
+
+# Legacy confidence override — takes precedence over model.confidence when set.
+# Useful for a global quality gate independent of model tuning.
+global_parameters:
+  confidence_threshold: 0.85
+
+storage:
+  endpoint_url: http://localhost:9000
+  access_key: changeme
+  secret_key: changeme
+  region_name: texas-coast          # must match MINIO_REGION in docker-compose
+  buckets:
+    input:      security-camera-unprocessed  # .TS files land here
+    converted:  security-camera-converted    # in-flight MP4s (always cleaned up)
+    archive:    security-camera-archive      # raw MP4s with detections, original filename
+    annotated:  security-camera-annotated    # annotated MP4s (only when save_annotated: true)
+    quarantine: security-camera-quarantine   # no-detection clips for review/deletion
+    highlights: security-camera-highlights   # trimmed sub-clips from extract_highlights.py
+
+database:
+  host: localhost
+  port: 3306
+  name: footage_metadata
+  user: autoCowboy
+  password: changeme
+
+rabbitmq:
+  host: localhost
+  port: 5672
+  user: cowboyRabbit
+  password: changeme
+
+model:
+  path: models/yolov8n.pt
+  confidence: 0.25                  # used only if global_parameters.confidence_threshold is absent
+  # Set true only while tuning — writes an annotated copy alongside the raw archive.
+  # Leave false in normal operation; raw MP4s are always retained for future reprocessing.
+  save_annotated: false
+  debug: false
+  debug_dir: debug                  # accepts absolute paths, e.g. /mnt/c/Users/you/Desktop/debug-frames
+
+watcher:
+  scan_interval: 60                 # seconds between MinIO scans
+  inflight_ttl:  600                # seconds to suppress re-publishing an in-flight file
+
+# Content-based sorting for sort_archive.py.
+# Each category maps a friendly name to the YOLO labels that belong to it.
+# A clip matching multiple categories gets a combined bin: people+vehicles.
+# Clips with detections that match no category go to "other".
+# Labels are case-insensitive. Run `python3 query_detections.py --list-objects`
+# to see every label your model has produced.
+sort:
+  categories:
+    people:
+      labels: [person]
+    vehicles:
+      labels: [car, truck, bus, motorcycle, bicycle]
+    animals:
+      labels: [dog, cat, bird, horse, cow, sheep, bear, elephant, zebra, giraffe]
+
+# Zero-shot scene classification for classify_scenes.py.
+# Uses OpenCLIP (ViT-B-32) — no training data required.
+# Add, remove, or rename scenes freely. Each scene gets a list of text prompts;
+# the highest cosine similarity across all prompts wins for that scene.
+# n_frames: frames sampled per clip (more = slower but more accurate)
+scenes:
+  n_frames: 8
+  prompts:
+    construction_work:
+      - "person doing construction work"
+      - "person using power tools or hand tools"
+      - "building or framing construction activity"
+    material_handling:
+      - "person carrying lumber or building materials"
+      - "loading or unloading materials from a vehicle"
+      - "stacking or moving construction supplies"
+    arrival:
+      - "person walking toward the camera arriving"
+      - "vehicle arriving and parking"
+      - "person getting out of a truck or car"
+    idle:
+      - "empty outdoor scene with no people"
+      - "person standing still not working"
+      - "quiet scene minimal activity"
+
+# Heuristic activity scoring for score_clips.py.
+# Weights must sum to 1.0. Adjust to emphasise what matters most for your footage.
+#   detection_rate    — fraction of clip seconds with at least one detection
+#   avg_objects       — mean simultaneous detections per second (normalised to 3)
+#   label_diversity   — distinct YOLO labels seen (normalised to 3)
+#   mean_confidence   — average detection confidence
+#   temporal_coverage — how evenly spread detections are across the clip
+scoring:
+  weights:
+    detection_rate:    0.35
+    avg_objects:       0.25
+    label_diversity:   0.20
+    mean_confidence:   0.10
+    temporal_coverage: 0.10
+
+# Highlight extraction for extract_highlights.py.
+# min_clip_score: skip clips below this overall score (overridden by --min-score flag)
+# min_duration:   extend short active windows to at least this many seconds
+# max_duration:   split windows longer than this into chunks
+# merge_gap:      merge active windows separated by <= N quiet seconds
+# pad:            seconds of buffer added before/after each active window
+highlights:
+  min_clip_score: 0.30
+  min_duration:   10
+  max_duration:   60
+  merge_gap:      5
+  pad:            2
+
+# Named recognition — Step 2.
+# Set enabled: true after enrolling subjects via `python3 enroll.py`.
+# threshold is cosine similarity (0–1); 0.50 is a reasonable starting point.
+# insightface uses ArcFace face embeddings; clip uses OpenCLIP ViT-B-32 visual embeddings.
+# Restart workers after changing this section — gallery is cached per worker process.
+recognition:
+  enabled: false
+  threshold: 0.50
+  categories:
+    people:
+      model: insightface
+    vehicles:
+      model: clip
+    animals:
+      model: clip
+
+# Spatial masks — one entry per camera ID (last char before extension in filename).
+# Vertices are [x, y] pixels at 640x480. Only detections whose bounding-box
+# centre falls inside the polygon are kept.
+filters:
+  F:
+    spatial_mask:
+      vertices: [[0, 0], [640, 0], [640, 408], [0, 408]]
+  B:
+    spatial_mask:
+      vertices: [[0, 0], [640, 0], [640, 480], [0, 480]]
+  L:
+    spatial_mask:
+      vertices: [[0, 0], [480, 0], [480, 480], [0, 480]]
+  R:
+    spatial_mask:
+      vertices: [[160, 0], [640, 0], [640, 480], [160, 480]]

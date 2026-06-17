@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+import yaml
+import json
+import logging
+import os
+import pika
+from src.transcoder import download_for_analysis
+from src.analyzer import detect_objects
+from src.router import get_camera_context
+from src.persistence import is_processed, commit_result, record_dlq, ensure_buckets
+from src.database import ensure_schema
+from src.queue_client import get_channel, publish, ANALYZE_QUEUE, ANALYZE_DLQ
+from src.logging_setup import init_logging, discord_notify
+from src.event_clipper import extract_event_clips
+from src.config import load_config
+
+config = {}
+MAX_ATTEMPTS = 3
+_files_since_summary = 0
+_detections_since_summary = 0
+
+
+def handle(ch, method, properties, body):
+    msg = json.loads(body)
+    mp4_key = msg['mp4_key']
+    camera_id = msg['camera_id']
+
+    if is_processed(mp4_key, config):
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+        return
+
+    attempt = (properties.headers or {}).get('x-retry-count', 0) + 1
+    logging.info(f"Analyzing: {mp4_key} (attempt {attempt}/{MAX_ATTEMPTS})")
+
+    context = get_camera_context(mp4_key, config)
+    if not context:
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+        return
+
+    local_mp4 = None
+    try:
+        local_mp4 = download_for_analysis(mp4_key, config)
+        if not local_mp4:
+            raise RuntimeError("Download failed")
+
+        result = detect_objects(local_mp4, context['mask_config'], config)
+        commit_result(mp4_key, config, result, camera_id=camera_id)
+
+        n = len(result.get('events', []))
+
+        if config.get('model', {}).get('event_clips', {}).get('enabled') and n > 0:
+            n_clips = extract_event_clips(local_mp4, mp4_key, result['events'], config)
+        else:
+            n_clips = 0
+
+        global _files_since_summary, _detections_since_summary
+        _files_since_summary += 1
+        if n > 0:
+            _detections_since_summary += 1
+            clip_note = f", {n_clips} clip{'s' if n_clips != 1 else ''}" if n_clips else ""
+            labels = sorted({d['label'] for e in result.get('events', []) for d in e.get('detections', [])})
+            label_note = f" [{', '.join(labels)}]" if labels else ""
+            discord_notify(f"▸ **[analyze]** {mp4_key} — {n} event{'s' if n != 1 else ''}{clip_note}{label_note}")
+
+        interval = config.get('discord', {}).get('summary_interval', 25)
+        if _files_since_summary >= interval:
+            discord_notify(f"▸ **[analyze]** processed {_files_since_summary} files — {_detections_since_summary} with detections")
+            _files_since_summary = 0
+            _detections_since_summary = 0
+
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+
+    except Exception as e:
+        logging.error(f"Analysis failed for {mp4_key} (attempt {attempt}/{MAX_ATTEMPTS}): {e}")
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+        if attempt < MAX_ATTEMPTS:
+            publish(ch, ANALYZE_QUEUE, msg, headers={'x-retry-count': attempt})
+        else:
+            record_dlq(mp4_key, ANALYZE_DLQ, str(e), config)
+            publish(ch, ANALYZE_DLQ, {**msg, 'error': str(e)})
+
+    finally:
+        if local_mp4 and os.path.exists(local_mp4):
+            os.remove(local_mp4)
+
+
+if __name__ == '__main__':
+    config = load_config()
+    init_logging('analyzer')
+    ensure_schema(config)
+    ensure_buckets(config)
+    conn, ch = get_channel(config)
+    ch.basic_qos(prefetch_count=1)
+    ch.basic_consume(queue=ANALYZE_QUEUE, on_message_callback=handle)
+    logging.info("Analyzer worker ready. Waiting for jobs...")
+    try:
+        ch.start_consuming()
+    except KeyboardInterrupt:
+        conn.close()

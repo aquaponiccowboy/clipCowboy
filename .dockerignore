@@ -1,0 +1,15 @@
+.venv/
+bot_data/
+minio_data/
+mariadb_data/
+rabbitmq_data/
+debug/
+temp_*
+*.TS
+*.mp4
+*.jpg
+*.png
+.env
+config.yml
+__pycache__/
+*.py[cod]

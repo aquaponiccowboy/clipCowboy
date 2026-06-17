@@ -14,10 +14,16 @@ venv/
 *.jpg
 *.png
 
+# Pipeline working directories
+debug/
+temp_*
+
 # Docker / Backend Data Volumes
 minio_data/
 mariadb_data/
 rabbitmq_data/
+bot_data/
+bots/*/data/
 
 # Environment Variables / Secrets
 .env

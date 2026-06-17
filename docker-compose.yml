@@ -4,43 +4,114 @@ services:
     container_name: footage_mariadb
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: root_password_here
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: footage_metadata
-      MYSQL_USER: autoCowboy
-      MYSQL_PASSWORD: DP@uTf68
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     ports:
       - "3306:3306"
     volumes:
-      - /mnt/c/Users/zeke/Desktop/securityCowboy/mariadb_data:/var/lib/mysql
+      - ${MARIADB_DATA_PATH}:/var/lib/mysql
 
   minio:
     image: minio/minio
     container_name: footage_minio
     restart: unless-stopped
     environment:
-      MINIO_ROOT_USER: adminCowboy
-      MINIO_ROOT_PASSWORD: ug54!tR9a
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       MINIO_REGION: texas-coast
     command: server /data --console-address ":9001"
     ports:
-      - "9000:9000"   
-      - "9001:9001"   
+      - "9000:9000"
+      - "9001:9001"
     volumes:
-      - /mnt/c/Users/zeke/Desktop/securityCowboy/minio_data:/data
+      - ${MINIO_DATA_PATH}:/data
 
   rabbitmq:
     image: rabbitmq:3-management
     container_name: footage_rabbitmq
     restart: unless-stopped
     environment:
-      RABBITMQ_DEFAULT_USER: cowboyRabbit
-      RABBITMQ_DEFAULT_PASS: wOia64HgF1
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
     ports:
-      - "5672:5672"   
-      - "15672:15672" 
+      - "5672:5672"
+      - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+
+  pipeline:
+    build: .
+    container_name: footage_pipeline
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    env_file:
+      - .env
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_LOG_CHANNEL_ID=${DISCORD_LOG_CHANNEL_ID}
+      - PIPELINE_CONTROL_PORT=8765
+      # Service host overrides — config.yml uses localhost defaults; these
+      # point workers at the correct Docker service names at runtime.
+      - DATABASE_HOST=mariadb
+      - MINIO_ENDPOINT=http://minio:9000
+      - RABBITMQ_HOST=rabbitmq
+    ports:
+      - "8765:8765"
+    volumes:
+      - ./config.yml:/app/config.yml:ro
+      - pipeline_models:/root/.cache   # YOLO + CLIP model cache across rebuilds
+
+  clipCowboy_bot:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: clipCowboy_bot
+    restart: unless-stopped
+    ports:
+      - "18789:18789"
+    env_file:
+      - .env
+    environment:
+      # Disable bonjour/mDNS — multicast doesn't work on Docker bridge networks.
+      - OPENCLAW_DISABLE_BONJOUR=1
+
+      # OpenClaw platform auth — run `openclaw auth token` on host to get this
+      - OPENCLAW_AUTH_TOKEN=${OPENCLAW_AUTH_TOKEN}
+
+      # Discord bot token
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+
+      # Ollama on Sparky
+      - OLLAMA_HOST=http://192.168.1.38:11434
+      - OLLAMA_API_KEY=ollama
+
+      # MinIO
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-http://minio:9000}
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - MINIO_BUCKET=openclaw
+
+      # ClipCowboy DB
+      - SC_DB_HOST=mariadb
+      - SC_DB_PORT=3306
+      - SC_DB_NAME=footage_metadata
+      - SC_DB_USER=${MYSQL_USER}
+      - SC_DB_PASSWORD=${MYSQL_PASSWORD}
+
+      # Pipeline control server — on Sparky, exposed on LAN port 8765
+      - PIPELINE_CONTROL_URL=http://192.168.1.38:8765
+
+    volumes:
+      - ./bots/clipCowboy/data:/home/node/.openclaw
+      - ./bots/clipCowboy/workspace:/home/node/.openclaw/workspace
 
 
 volumes:
   rabbitmq_data:
+  pipeline_models:
